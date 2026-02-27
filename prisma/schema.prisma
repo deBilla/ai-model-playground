@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// NOTE: Prisma does not allow env() in the provider field.
+// For production PostgreSQL, change provider to "postgresql" before running
+// prisma migrate deploy, or maintain separate schema files per environment.
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime     @default(now())
+  comparisons  Comparison[]
+
+  @@index([email])
+}
+
+model Comparison {
+  id         String          @id @default(cuid())
+  prompt     String
+  createdAt  DateTime        @default(now())
+  shareToken String?         @unique @default(cuid())
+  userId     String
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  responses  ModelResponse[]
+
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model ModelResponse {
+  id           String              @id @default(cuid())
+  provider     String
+  label        String
+  responseText String
+  comparisonId String
+  comparison   Comparison          @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+  metrics      PerformanceMetrics?
+
+  @@index([comparisonId])
+}
+
+model PerformanceMetrics {
+  id               String        @id @default(cuid())
+  promptTokens     Int
+  completionTokens Int
+  totalTokens      Int
+  estimatedCost    Float
+  latencyMs        Int
+  timeToFirstToken Int
+  tokensPerSecond  Float
+  responseLength   Int
+  modelResponseId  String        @unique
+  modelResponse    ModelResponse @relation(fields: [modelResponseId], references: [id], onDelete: Cascade)
+}

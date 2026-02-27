@@ -1,101 +1,87 @@
-import Image from "next/image";
+'use client'
+
+import { useEffect, useCallback } from 'react'
+import dynamic from 'next/dynamic'
+import { LogOut } from 'lucide-react'
+import { usePlaygroundStore } from '@/lib/store'
+import { MODELS } from '@/lib/models.config'
+import { useStream } from '@/hooks/useStream'
+import type { User } from '@/lib/types'
+import PromptInput from '@/components/PromptInput'
+import CompareLayout from '@/components/CompareLayout'
+import AuthModal from '@/components/AuthModal'
+import { Button } from '@/components/ui/button'
+
+// Lazy-load the drawer — not needed for initial render
+const HistoryDrawer = dynamic(() => import('@/components/HistoryDrawer'), { ssr: false })
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const setUser = usePlaygroundStore((s) => s.setUser)
+  const clearUser = usePlaygroundStore((s) => s.clearUser)
+  const user = usePlaygroundStore((s) => s.user)
+  const { run, stop } = useStream()
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  // Restore session on mount
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data?.user) setUser(data.user as User) })
+      .catch(() => {})
+  }, [setUser])
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch { /* ignore */ }
+    clearUser()
+  }, [clearUser])
+
+  return (
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">
+      <AuthModal />
+
+      {/* Top bar */}
+      <header className="border-b border-neutral-800 px-6 py-4 flex items-center justify-between flex-shrink-0">
+        <div>
+          <h1 className="text-lg font-bold tracking-tight">AI Model Playground</h1>
+          <p className="text-xs text-neutral-400 mt-0.5">
+            {MODELS.map((m) => m.label).join(' · ')} — side by side
+          </p>
         </div>
+        <div className="flex items-center gap-3">
+          {user ? (
+            <>
+              <span className="text-xs text-neutral-400 hidden sm:block">
+                {user.name ?? user.email}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                className="text-neutral-400 hover:text-white gap-1.5 h-8 px-2"
+                aria-label="Log out"
+              >
+                <LogOut size={14} aria-hidden="true" />
+                <span className="hidden sm:inline">Log out</span>
+              </Button>
+            </>
+          ) : (
+            <span className="text-xs text-neutral-400 font-mono">parallel streaming</span>
+          )}
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="flex flex-col flex-1 px-4 sm:px-6 py-6 gap-6 min-h-0">
+        <section className="flex-shrink-0">
+          <PromptInput onSubmit={run} onStop={stop} />
+        </section>
+        <section className="flex-1 min-h-0" style={{ minHeight: '500px' }}>
+          <CompareLayout />
+        </section>
       </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+      <HistoryDrawer />
     </div>
-  );
+  )
 }

@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  transpilePackages: ['react-syntax-highlighter'],
+}
 
-export default nextConfig;
+export default nextConfig
