@@ -6,7 +6,7 @@ generator client {
 // For production PostgreSQL, change provider to "postgresql" before running
 // prisma migrate deploy, or maintain separate schema files per environment.
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
