@@ -135,23 +135,23 @@ DATABASE_PROVIDER=postgresql DATABASE_URL=<prod-url> npx prisma migrate deploy
 ## Technical Decisions and Tradeoffs
 
 * **Config-Driven Providers vs Individual Files**
-* **Chosen:** A single `models.config.ts` file acting as the source of truth for all models.
-* **Tradeoff:** Individual files would allow for per-model custom logic, but the config approach drastically reduces boilerplate and makes adding new models a simple one-line array addition.
+ **Chosen:** A single `models.config.ts` file acting as the source of truth for all models.
+ **Tradeoff:** Individual files would allow for per-model custom logic, but the config approach drastically reduces boilerplate and makes adding new models a simple one-line array addition.
 
 
 * **API Modularity and Strict Layers**
-* **Chosen:** Layered backend architecture (`Controller -> DTO -> Service -> Repository`).
-* **Tradeoff:** Requires more boilerplate upfront compared to writing monolithic Next.js route handlers, but ensures the codebase remains robust, testable, and strictly decoupled as it grows.
+ **Chosen:** Layered backend architecture (`Controller -> DTO -> Service -> Repository`).
+ **Tradeoff:** Requires more boilerplate upfront compared to writing monolithic Next.js route handlers, but ensures the codebase remains robust, testable, and strictly decoupled as it grows.
 
 
 * **Single Chat Endpoint vs Batched Route**
-* **Chosen:** A generic chat streaming route (`/api/chats`) called *N* times in parallel from the browser.
-* **Tradeoff:** A server-side fan-out could reduce HTTP request overhead, but requires complex multiplexing to stream multiple responses back through a single connection. Client-side fan-out is highly resilient and delegates concurrency to the browser.
+ **Chosen:** A generic chat streaming route (`/api/chats`) called *N* times in parallel from the browser.
+ **Tradeoff:** A server-side fan-out could reduce HTTP request overhead, but requires complex multiplexing to stream multiple responses back through a single connection. Client-side fan-out is highly resilient and delegates concurrency to the browser.
 
 
 * **Zustand vs Context/Redux**
-* **Chosen:** Zustand for global state management.
-* **Tradeoff:** Minimal boilerplate without React Context Provider wrapping. Ideal for highly concurrent updates (streaming text into multiple panels) without triggering heavy top-level DOM re-renders.
+ **Chosen:** Zustand for global state management.
+ **Tradeoff:** Minimal boilerplate without React Context Provider wrapping. Ideal for highly concurrent updates (streaming text into multiple panels) without triggering heavy top-level DOM re-renders.
 
 
 

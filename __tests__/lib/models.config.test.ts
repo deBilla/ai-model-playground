@@ -71,9 +71,9 @@ describe('calculateCost', () => {
 
 describe('getModel', () => {
   it('returns the correct model for valid IDs', () => {
-    expect(getModel('openai')?.label).toBe('GPT-4o')
-    expect(getModel('anthropic')?.label).toBe('Claude 3.5 Sonnet')
-    expect(getModel('xai')?.label).toBe('Grok 3')
+    expect(getModel('openai')?.label).toBe('OpenAI GPT-4o')
+    expect(getModel('anthropic')?.label).toBe('Anthropic Claude 3.5 Sonnet')
+    expect(getModel('xai')?.label).toBe('xAI Grok-3')
   })
 
   it('returns undefined for unknown IDs', () => {
