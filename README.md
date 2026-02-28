@@ -1,234 +1,186 @@
 # AI Model Playground
 
-A side-by-side AI model comparison tool that streams responses from multiple providers simultaneously, showing real-time latency, token counts, and cost estimates for each.
+This application is a side-by-side AI model comparison tool that streams responses from multiple providers simultaneously. It displays real-time latency, token counts, and cost estimates for each model, allowing developers and users to benchmark LLM performance instantly.
 
----
+## Project Structure and Architecture
 
-## Overview
+The application is built on a highly modular, modern Next.js stack, leveraging several key architectural patterns to handle concurrent AI streaming efficiently:
 
-Submit a single prompt and watch GPT-4o, Claude 3.5 Sonnet, Grok Beta, and DeepSeek-V3 respond in parallel, streamed token-by-token. Each panel shows live output with a metrics footer (tokens, cost, latency) once complete. Past comparisons are saved to a local database and can be restored from the history drawer.
+### 1. Serverless Backend-for-Frontend (BFF)
 
----
+The Next.js `app/api/` routes act as a BFF. Instead of the React frontend communicating directly with third-party AI APIs or the database, it talks strictly to these internal routes. This secures API keys (`VERCEL_AI_GATEWAY_KEY`, `JWT_SECRET`), shapes the data precisely for the frontend, and currently scales automatically via Vercel's serverless infrastructure.
 
-## Architecture
+### 2. Strict Layered Architecture (Controller-DTO-Service-Repository)
 
-### Config-Driven Provider System
+The backend enforces a strict separation of concerns, ensuring business logic is isolated and testable:
 
-All model definitions live in a single file: `lib/models.config.ts`. Each entry contains the model's display label, gateway routing string, and per-million-token pricing. Adding a new model requires exactly one change — a new object in the `MODELS` array — and zero changes to any route, component, or store.
+* **Controllers (`app/api/`):** Route handlers that parse incoming HTTP requests and return HTTP responses or NDJSON streams.
 
-```ts
-// lib/models.config.ts
-export const MODELS = [
-  {
-    id: 'openai',
-    label: 'GPT-4o',
-    provider: 'OpenAI',
-    gatewayModel: 'openai/gpt-4o',
-    inputCostPer1M: 5.00,
-    outputCostPer1M: 15.00,
-    color: 'bg-emerald-900/60',
-    textColor: 'text-emerald-400',
-  },
-  // ... add more here
-] as const
-```
+* **DTOs (`lib/modules/.../dto.ts`):** Data Transfer Objects that validate and strongly type the incoming payloads (e.g., using Zod) before handing them off.
 
-The `as const` assertion gives TypeScript literal types for `id`, making `ProviderId = 'openai' | 'anthropic' | 'xai' | 'deepseek'` a union of string literals — fully type-checked everywhere.
+* **Services (`lib/modules/.../service.ts`):** The core business logic layer. Services orchestrate the application's rules, handle AI interactions, and manage state without knowing about HTTP or raw SQL.
 
-### API Design: One Route, Parallel Fetches
+* **Repositories (`lib/modules/.../repository.ts`):** The data access layer. Repositories interact directly with the Prisma client (`lib/db.ts`) to execute database queries.
 
-There is a single `/api/chat` route that accepts `{ prompt, provider }` and streams an NDJSON response for that one provider. The frontend calls this route once per model, all in parallel via `Promise.allSettled`. Each call updates its own Zustand panel slice independently as tokens arrive.
+### 3. Client-Driven Fan-Out (Parallel Orchestration)
 
-This beats a single `/api/compare` route that fans out server-side because:
+To achieve simultaneous streaming, the app uses a client-side fan-out approach. The browser initiates a `Promise.allSettled` block, firing independent parallel `POST` requests to the `/api/chats` route for each model. This utilizes HTTP/2 multiplexing, preventing a slow model from blocking the execution of faster models.
 
-- **True parallelism**: each browser fetch is a separate HTTP/2 stream, not a server-side fan-out bottleneck
-- **Independent failure**: if one provider errors, the other three continue unaffected
-- **Simpler streaming**: each route streams a single NDJSON sequence; no multiplexing needed
+### 4. The Facade / Gateway Pattern
 
-The NDJSON protocol uses a `t` discriminant on each line:
-```json
-{ "t": "text",  "v": "Hello" }
-{ "t": "meta",  "promptTokens": 12, "completionTokens": 48, "latencyMs": 1340, "estimatedCost": 0.00042 }
-{ "t": "error", "v": "Rate limit exceeded" }
-```
+By routing all LLM traffic through the Vercel AI Gateway using a single provider client, the app utilizes the Facade pattern. The underlying complexities of Anthropic, Google, and OpenAI's specific REST implementations are abstracted away behind a unified interface.
 
-### Vercel AI Gateway — Single Key
+### Directory Tree
 
-All four providers are routed through the Vercel AI Gateway using one `VERCEL_AI_GATEWAY_KEY`. The gateway exposes an OpenAI-compatible interface, so a single `createOpenAI` client handles all providers. Each model is addressed by a namespaced string like `openai/gpt-4o` or `anthropic/claude-3-5-sonnet-20241022`.
-
----
-
-## Project Structure
-
-```
+```text
 ai-model-playground/
 ├── app/
 │   ├── api/
-│   │   ├── chat/route.ts         # Streaming endpoint — one provider per request
-│   │   └── history/route.ts      # GET/POST comparison history to DB
-│   ├── layout.tsx                # Root layout
-│   └── page.tsx                  # Main page — orchestrates parallel streams
+│   │   ├── auth/                 # Controllers: Authentication endpoints
+│   │   ├── chats/                # Controllers: Streaming chat API (NDJSON)
+│   │   ├── comparisons/          # Controllers: Viewing/saving comparisons
+│   │   └── ...                   # Controllers: cron, guest, shares
+│   ├── layout.tsx                
+│   └── page.tsx                  
 │
 ├── components/
 │   ├── CompareLayout.tsx         # Responsive grid of model panels + sync scroll
-│   ├── HistoryDrawer.tsx         # Slide-out drawer with past comparisons
-│   ├── MetricsBadge.tsx          # Token / cost / latency badges
-│   ├── ModelPanel.tsx            # Single model response panel with status
-│   └── PromptInput.tsx           # Textarea + submit button
+│   ├── MetricsComparison.tsx     # Cost, token, and latency data tables
+│   └── ...
 │
 ├── lib/
-│   ├── models.config.ts          # ★ Single source of truth for all models
+│   ├── modules/                  # Domain-Driven Modules
+│   │   ├── auth/
+│   │   │   ├── auth.dto.ts       # Validation schemas for login/register
+│   │   │   ├── auth.service.ts   # Business logic (hashing, JWT signing)
+│   │   │   └── auth.repository.ts# User DB queries
+│   │   ├── chat/
+│   │   │   ├── chat.dto.ts       # Prompt and provider validation
+│   │   │   └── chat.service.ts   # AI streaming orchestration
+│   │   └── comparisons/
+│   │       ├── comparisons.dto.ts
+│   │       ├── comparisons.service.ts
+│   │       └── comparisons.repository.ts
 │   ├── db.ts                     # Prisma client singleton
-│   ├── store.ts                  # Zustand store — panel state + history
-│   ├── streamProvider.ts         # NDJSON stream consumer per provider
-│   └── types.ts                  # Shared TypeScript types
+│   ├── models.config.ts          # Single source of truth for all models
+│   └── store.ts                  # Zustand store for app state
 │
-├── prisma/
-│   ├── schema.prisma             # DB schema — provider configurable via env
-│   └── dev.db                    # SQLite dev database (gitignored)
-│
-├── .env                          # Local secrets (gitignored)
-├── .env.example                  # Template for local dev
-└── .env.production.example       # Template for production deployment
-```
+└── prisma/
+    └── schema.prisma             # DB schema (PostgreSQL)
 
----
+```
 
 ## Setup Instructions
 
 ### Local Development
 
-1. **Clone the repo**
-   ```bash
-   git clone <repo-url>
-   cd ai-model-playground
-   ```
+1. **Clone the repository**
+```bash
+git clone <repo-url>
+cd ai-model-playground
+
+```
+
 
 2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+```bash
+npm install
 
-3. **Configure environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env and set VERCEL_AI_GATEWAY_KEY
-   ```
+```
 
+
+3. **Configure environment variables**
+```bash
+cp .env.example .env
+
+```
+
+
+*Edit `.env` and provide your database connection string, JWT secret, and `VERCEL_AI_GATEWAY_KEY`.*
 4. **Run database migrations**
-   ```bash
-   npx prisma migrate dev
-   ```
+```bash
+npx prisma migrate dev
 
-5. **Start the dev server**
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000).
+```
+
+
+5. **Start the development server**
+```bash
+npm run dev
+
+```
+
+
+*Open [http://localhost:3000](https://www.google.com/search?q=http://localhost:3000) in your browser.*
 
 ### Production Deployment (Vercel)
 
-1. Push your code to GitHub and import the repo in the Vercel dashboard.
+1. Push your code to GitHub and import the repository into your Vercel dashboard.
+2. Set the following environment variables in **Project → Settings → Environment Variables**:
+* `VERCEL_AI_GATEWAY_KEY`
+* `DATABASE_PROVIDER` (e.g., `postgresql`)
+* `DATABASE_URL` (e.g., `postgresql://user:pass@host:5432/dbname`)
+* `JWT_SECRET`
 
-2. Set environment variables in **Project → Settings → Environment Variables**:
-   ```
-   VERCEL_AI_GATEWAY_KEY   = <your gateway key>
-   DATABASE_PROVIDER       = postgresql
-   DATABASE_URL            = postgresql://user:pass@host:5432/dbname
-   ```
 
 3. Run migrations against your production database:
-   ```bash
-   DATABASE_PROVIDER=postgresql DATABASE_URL=<prod-url> npx prisma migrate deploy
-   ```
+```bash
+DATABASE_PROVIDER=postgresql DATABASE_URL=<prod-url> npx prisma migrate deploy
 
-4. Deploy — Vercel runs `npm run build` automatically.
-
----
-
-## Database Configuration
-
-Two environment variables control the database:
-
-| Variable | Local dev | Production |
-|---|---|---|
-| `DATABASE_PROVIDER` | `sqlite` | `postgresql` |
-| `DATABASE_URL` | `file:./dev.db` | `postgresql://...` |
-
-SQLite is zero-config for development. PostgreSQL is recommended for production (Neon, Supabase, and Railway all work). The Prisma schema reads `DATABASE_PROVIDER` via `env()`, so no schema edits are needed when switching environments.
-
-> **Note:** SQLite and PostgreSQL require separate migration histories. Run `prisma migrate dev` locally and `prisma migrate deploy` (with production env vars) for production.
-
----
-
-## Adding a New Model
-
-Add one entry to `lib/models.config.ts`. Everything else — the API route, Zustand store, all components, and cost calculations — picks it up automatically.
-
-```ts
-// lib/models.config.ts  ← the only file you touch
-{
-  id: 'google',
-  label: 'Gemini 2.0 Flash',
-  provider: 'Google',
-  gatewayModel: 'google/gemini-2.0-flash',
-  inputCostPer1M: 0.10,
-  outputCostPer1M: 0.40,
-  color: 'bg-yellow-900/60',
-  textColor: 'text-yellow-400',
-},
 ```
 
----
+
+4. Deploy the application. Vercel will automatically run `npm run build`.
 
 ## Technical Decisions and Tradeoffs
 
-### Config-Driven Providers vs Individual Files
+* **Config-Driven Providers vs Individual Files**
+* **Chosen:** A single `models.config.ts` file acting as the source of truth for all models.
+* **Tradeoff:** Individual files would allow for per-model custom logic, but the config approach drastically reduces boilerplate and makes adding new models a simple one-line array addition.
 
-**Chosen:** single `models.config.ts` with a `MODELS` array.
 
-The previous approach had one file per provider, each duplicating the same `createOpenAI` + `streamText` boilerplate. Adding a model required touching 5+ files. The config approach collapses everything to one entry and makes cost and routing data inspectable in one place.
+* **API Modularity and Strict Layers**
+* **Chosen:** Layered backend architecture (`Controller -> DTO -> Service -> Repository`).
+* **Tradeoff:** Requires more boilerplate upfront compared to writing monolithic Next.js route handlers, but ensures the codebase remains robust, testable, and strictly decoupled as it grows.
 
-**Tradeoff:** individual files allow per-model customization (e.g. different system prompts, temperature). If needed, extend `ModelConfig` with optional fields.
 
-### Single `/api/chat` vs `/api/compare`
+* **Single Chat Endpoint vs Batched Route**
+* **Chosen:** A generic chat streaming route (`/api/chats`) called *N* times in parallel from the browser.
+* **Tradeoff:** A server-side fan-out could reduce HTTP request overhead, but requires complex multiplexing to stream multiple responses back through a single connection. Client-side fan-out is highly resilient and delegates concurrency to the browser.
 
-**Chosen:** one generic `/api/chat` route called N times in parallel from the browser.
 
-A single `/api/compare` route would need to fan out server-side, buffer or multiplex N streams, and handle partial failures in one handler. The parallel-fetch approach delegates concurrency to the browser (free) and keeps each stream simple and independent.
+* **Zustand vs Context/Redux**
+* **Chosen:** Zustand for global state management.
+* **Tradeoff:** Minimal boilerplate without React Context Provider wrapping. Ideal for highly concurrent updates (streaming text into multiple panels) without triggering heavy top-level DOM re-renders.
 
-**Tradeoff:** N parallel HTTP requests vs one. In practice the difference is negligible with HTTP/2 multiplexing, and the simpler code path is worth it.
 
-### SQLite Dev / PostgreSQL Prod
 
-**Chosen:** `provider = env("DATABASE_PROVIDER")` in Prisma schema.
+## Future Improvements (Enterprise Scale & High Traffic)
 
-Zero setup for local development, production-grade persistence in deployment. The schema models are compatible across both providers.
+As the application scales beyond standard serverless limits, the following architectural evolutions are planned to handle high concurrency, persistent connections, and user tracking:
 
-**Tradeoff:** separate migration histories per provider. Keep them in sync by running `migrate deploy` on every production release.
+### 1. Kubernetes & Dedicated API Gateway
 
-### Zustand vs Redux / Context
+Moving away from transient serverless functions to a containerized **Kubernetes (K8s)** setup. A dedicated API Gateway (e.g., Kong or an Ingress controller) will handle routing, rate-limiting, and managing long-lived connections (WebSockets/SSE) far more effectively than serverless constraints allow.
 
-**Chosen:** Zustand.
+### 2. Analytics & Guest Tracking via PostHog
 
-Minimal boilerplate, no Provider wrapping, built-in selector subscriptions that prevent unnecessary re-renders. For this app size, Redux's ceremony adds no value.
+Currently, guest sessions are tracked using a rudimentary combination of an `isGuest` boolean and a randomly generated ID stored in the database.
 
-### Vercel AI Gateway vs Direct Provider Keys
+* **Improvement:** Migrate guest tracking and telemetry to **PostHog**. This will provide robust device fingerprinting, session replay, and deeper product analytics without cluttering the primary PostgreSQL database with anonymous user states.
 
-**Chosen:** Vercel AI Gateway with a single key.
+### 3. Asynchronous Message Queues (Claim Ticket Pattern)
 
-Managing separate API keys and billing accounts for four providers is operationally expensive. The gateway consolidates billing, adds observability, and lets you add providers without changing credentials.
+Instead of holding open `POST` requests while waiting for the AI Gateway, the architecture will shift to an asynchronous queue (e.g., Redis / BullMQ) processed by dedicated worker pods.
 
-**Tradeoff:** adds a network hop through Vercel's infrastructure and requires a Vercel account. For latency-sensitive workloads, direct keys may be faster.
+* The client sends a `POST` payload and immediately receives a `jobId`.
+* The client connects via WebSocket or SSE using the `jobId` to receive the real-time stream safely.
 
----
+### 4. Advanced Caching Layer
 
-## Future Improvements
+* **Semantic Caching:** Implementing a vector database (`pgvector`) to cache responses based on the *meaning* of the prompt, bypassing the AI Gateway entirely for similar repeated queries.
+* **Edge Caching:** Pushing static configurations to a CDN or Redis Edge layer.
 
-- **Authentication** — User accounts so each user sees only their own history
-- **Model parameters** — Expose temperature, max tokens, and system prompt per panel
-- **Export** — Download comparison as PDF or generate a shareable link
-- **Cost alerts** — Set a per-request budget; warn before submitting expensive prompts
-- **Response ratings** — Thumbs up/down per model to track quality over time
-- **Vision inputs** — Image upload support for multimodal-capable models
-- **Diff view** — Highlight semantic differences between responses side by side
+### 5. Database Connection Pooling
+
+Implementing **PgBouncer** alongside the Kubernetes cluster to manage database connections efficiently, preventing connection exhaustion during traffic spikes.

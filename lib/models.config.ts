@@ -1,7 +1,7 @@
 export const MODELS = [
   {
     id: 'openai',
-    label: 'GPT-4o',
+    label: 'OpenAI GPT-4o',
     provider: 'OpenAI',
     gatewayModel: 'openai/gpt-4o',
     inputCostPer1M: 5.00,
@@ -11,7 +11,7 @@ export const MODELS = [
   },
   {
     id: 'anthropic',
-    label: 'Claude 3.5 Sonnet',
+    label: 'Anthropic Claude 3.5 Sonnet',
     provider: 'Anthropic',
     gatewayModel: 'anthropic/claude-3-5-sonnet-20241022',
     inputCostPer1M: 3.00,
@@ -21,7 +21,7 @@ export const MODELS = [
   },
   {
     id: 'xai',
-    label: 'XAi',
+    label: 'xAI Grok-3',
     provider: 'xAI',
     gatewayModel: 'xai/grok-3',
     inputCostPer1M: 5.00,

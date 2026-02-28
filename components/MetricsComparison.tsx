@@ -25,7 +25,9 @@ const METRICS: Metric[] = [
   { key: 'latencyMs',        label: 'Latency',        format: (v) => v < 1000 ? `${v}ms` : `${(v/1000).toFixed(2)}s`, winner: 'min' },
   { key: 'timeToFirstToken', label: 'Time to First',  format: (v) => v < 1000 ? `${v}ms` : `${(v/1000).toFixed(2)}s`, winner: 'min' },
   { key: 'tokensPerSecond',  label: 'Tokens/sec',     format: (v) => v.toFixed(1),                                      winner: 'max' },
-  { key: 'totalTokens',      label: 'Total Tokens',   format: (v) => v.toLocaleString(),                                winner: 'info' },
+  { key: 'promptTokens',     label: 'Prompt Tokens',  format: (v) => v.toLocaleString(),                                winner: 'info' },
+  { key: 'completionTokens', label: 'Output Tokens',  format: (v) => v.toLocaleString(),                                winner: 'info' },
+  { key: 'totalTokens',      label: 'Total Tokens',   format: (v) => v.toLocaleString(),                                winner: 'info' }, 
   { key: 'estimatedCost',    label: 'Cost',           format: formatCost,                                               winner: 'min' },
   { key: 'responseLength',   label: 'Response Length',format: (v) => `${v.toLocaleString()} chars`,                    winner: 'info' },
 ]
