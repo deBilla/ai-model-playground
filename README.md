@@ -267,5 +267,4 @@ Instead of holding open `POST` requests while waiting for the AI Gateway, the ar
 
 ### 4. Advanced Caching Layer
 
-* **Semantic Caching:** Implementing a vector database (`pgvector`) to cache responses based on the *meaning* of the prompt, bypassing the AI Gateway entirely for similar repeated queries.
 * **Edge Caching:** Pushing static configurations to a CDN or Redis Edge layer.
