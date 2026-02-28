@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { usePlaygroundStore } from '@/lib/store'
 import { GUEST_COMPARISON_LIMIT } from '@/lib/constants'
@@ -28,13 +28,13 @@ function GateScreen({ onRegister, onLogin }: { onRegister: () => void; onLogin: 
 
       {/* Headline */}
       <div className="space-y-2">
-        <h2 className="text-xl font-semibold text-white leading-tight">
+        <DialogTitle className="text-xl font-semibold text-white leading-tight">
           To keep going, let&apos;s get you set up
-        </h2>
-        <p className="text-sm text-neutral-400 max-w-xs mx-auto">
+        </DialogTitle>
+        <DialogDescription className="text-sm text-neutral-400 max-w-xs mx-auto">
           You&apos;ve used all {GUEST_COMPARISON_LIMIT} free comparisons. Create a free account to keep
           comparing models — no credit card required.
-        </p>
+        </DialogDescription>
       </div>
 
       {/* Value props */}
@@ -143,9 +143,12 @@ function FormScreen({
             <ChevronLeft size={18} />
           </button>
         )}
-        <h2 className="text-base font-semibold text-white">
+        <DialogTitle className="text-base font-semibold text-white">
           {view === 'login' ? 'Welcome back' : 'Create your account'}
-        </h2>
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          {view === 'login' ? 'Sign in to your account' : 'Register for a new account'}
+        </DialogDescription>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3" noValidate>
@@ -239,7 +242,7 @@ export default function AuthModal() {
     if (showAuthModal) {
       setView(isLimitReached ? 'gate' : 'login')
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAuthModal])
 
   const handleSuccess = (u: User) => {

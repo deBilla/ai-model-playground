@@ -14,7 +14,11 @@ const TEST_PASSWORD = 'Str0ngP@ss!'
 
 async function login(page: Page) {
   await page.goto('/')
-  await page.getByRole('tab', { name: 'Register' }).click()
+  // Click the header "Sign in" button to open the auth modal
+  await page.getByRole('button', { name: /sign in/i }).first().click()
+  await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 3000 })
+  // Switch to register form
+  await page.getByText('Create one free').click()
   await page.getByLabel(/email/i).fill(TEST_EMAIL)
   await page.getByLabel(/^password/i).fill(TEST_PASSWORD)
   await page.getByRole('button', { name: /create account/i }).click()

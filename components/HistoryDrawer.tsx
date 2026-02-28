@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Trash2, Share2, Check, Clock } from 'lucide-react'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePlaygroundStore } from '@/lib/store'
@@ -43,8 +43,8 @@ function HistoryCard({
   onShare: (e: React.MouseEvent) => void
 }) {
   const totalTokens = record.responses.reduce((a, r) => a + r.totalTokens, 0)
-  const totalCost   = record.responses.reduce((a, r) => a + r.estimatedCost, 0)
-  const maxLatency  = record.responses.length > 0 ? Math.max(...record.responses.map((r) => r.latencyMs)) : 0
+  const totalCost = record.responses.reduce((a, r) => a + r.estimatedCost, 0)
+  const maxLatency = record.responses.length > 0 ? Math.max(...record.responses.map((r) => r.latencyMs)) : 0
 
   return (
     <div className={`relative group border-b border-neutral-800 transition-colors ${isSelected ? 'bg-neutral-800/70' : 'hover:bg-neutral-800/40'}`}>
@@ -184,11 +184,15 @@ export default function HistoryDrawer() {
     MODELS.forEach(({ id }) => {
       const response = record.responses.find((r) => r.provider === id)
       setPanelState(id, response
-        ? { status: 'done', streamedText: response.responseText, error: undefined,
-            metrics: { promptTokens: response.promptTokens, completionTokens: response.completionTokens,
-              totalTokens: response.totalTokens, estimatedCost: response.estimatedCost,
-              latencyMs: response.latencyMs, timeToFirstToken: response.timeToFirstToken,
-              tokensPerSecond: response.tokensPerSecond, responseLength: response.responseLength } }
+        ? {
+          status: 'done', streamedText: response.responseText, error: undefined,
+          metrics: {
+            promptTokens: response.promptTokens, completionTokens: response.completionTokens,
+            totalTokens: response.totalTokens, estimatedCost: response.estimatedCost,
+            latencyMs: response.latencyMs, timeToFirstToken: response.timeToFirstToken,
+            tokensPerSecond: response.tokensPerSecond, responseLength: response.responseLength
+          }
+        }
         : { status: 'idle', streamedText: '', error: undefined, metrics: undefined })
     })
     setIsOpen(false)
@@ -255,6 +259,9 @@ export default function HistoryDrawer() {
                 </span>
               )}
             </SheetTitle>
+            <SheetDescription className="sr-only">
+              View and restore your previous AI model comparisons.
+            </SheetDescription>
           </SheetHeader>
 
           <div className="flex-1 overflow-y-auto">

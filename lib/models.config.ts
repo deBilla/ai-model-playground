@@ -21,7 +21,7 @@ export const MODELS = [
   },
   {
     id: 'xai',
-    label: 'Grok 3',
+    label: 'XAi',
     provider: 'xAI',
     gatewayModel: 'xai/grok-3',
     inputCostPer1M: 5.00,

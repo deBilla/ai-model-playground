@@ -15,19 +15,26 @@ const TEST_EMAIL = `settings-${Date.now()}@example.com`
 const TEST_PASSWORD = 'Str0ngP@ss!'
 
 async function loginAs(page: Page, email: string, password: string) {
-  // Register + login in one go (register will fail if already exists, then fall through to login)
   await page.goto('/')
+  // Open auth modal via "Sign in" header button
+  await page.getByRole('button', { name: /sign in/i }).first().click()
+  await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 3000 })
+
   try {
-    await page.getByRole('tab', { name: 'Register' }).click()
+    // Try to register first (fresh test run)
+    await page.getByText('Create one free').click()
     await page.getByLabel(/email/i).fill(email)
     await page.getByLabel(/^password/i).fill(password)
     await page.getByRole('button', { name: /create account/i }).click()
     await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 5000 })
   } catch {
-    // Already registered — try login
+    // Already registered — log in instead
+    await page.goto('/')
+    await page.getByRole('button', { name: /sign in/i }).first().click()
+    await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 3000 })
     await page.getByLabel(/email/i).fill(email)
     await page.getByLabel(/^password/i).fill(password)
-    await page.getByRole('button', { name: /sign in/i }).click()
+    await page.getByRole('button', { name: /^sign in$/i }).click()
     await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 5000 })
   }
 }
