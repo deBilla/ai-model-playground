@@ -21,6 +21,8 @@ const FULL_USER = {
   email: 'test@example.com',
   passwordHash: '$2b$12$hash',
   name: 'Test User',
+  isGuest: false,
+  guestExpiry: null,
   createdAt: NOW,
 }
 
@@ -29,10 +31,11 @@ const PUBLIC_USER = {
   id: 'user-1',
   email: 'test@example.com',
   name: 'Test User',
+  isGuest: false,
   createdAt: NOW,
 }
 
-const SELECT_PUBLIC = { id: true, email: true, name: true, createdAt: true }
+const SELECT_PUBLIC = { id: true, email: true, name: true, createdAt: true, isGuest: true }
 
 describe('AuthRepository', () => {
   let repo: AuthRepository
@@ -115,7 +118,7 @@ describe('AuthRepository', () => {
       await repo.create('anon@example.com', '$2b$hash')
 
       const call = vi.mocked(prisma.user.create).mock.calls[0][0]
-      expect(call.data.name).toBeUndefined()
+      expect(call.data!.name).toBeUndefined()
     })
 
     it('never stores plain-text passwords — data only contains passwordHash', async () => {
@@ -125,8 +128,8 @@ describe('AuthRepository', () => {
 
       const call = vi.mocked(prisma.user.create).mock.calls[0][0]
       // The stored value is the hash, not a plain password
-      expect(call.data.passwordHash).toBe('$2b$12$hashedvalue')
-      expect(call.data).not.toHaveProperty('password')
+      expect(call.data!.passwordHash).toBe('$2b$12$hashedvalue')
+      expect(call.data!).not.toHaveProperty('password')
     })
   })
 })

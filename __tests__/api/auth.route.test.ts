@@ -22,7 +22,7 @@ import { authService } from '@/lib/modules/auth'
 import { signToken } from '@/lib/auth'
 
 const NOW_ISO = '2025-01-15T10:00:00.000Z'
-const MOCK_USER = { id: 'user-1', email: 'test@example.com', name: 'Test User', createdAt: NOW_ISO }
+const MOCK_USER = { id: 'user-1', email: 'test@example.com', name: 'Test User', isGuest: false, createdAt: NOW_ISO }
 
 // Build an authenticated session cookie using a real JWT so getUserFromRequest works
 function authCookie(userId = 'user-1') {

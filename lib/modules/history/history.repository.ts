@@ -61,6 +61,10 @@ export class HistoryRepository {
     })
   }
 
+  async countByUser(userId: string): Promise<number> {
+    return prisma.comparison.count({ where: { userId } })
+  }
+
   async deleteByIdAndUser(id: string, userId: string) {
     return prisma.comparison.deleteMany({ where: { id, userId } })
   }

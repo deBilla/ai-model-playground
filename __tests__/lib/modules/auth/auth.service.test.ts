@@ -21,6 +21,8 @@ const DB_USER = {
   email: 'test@example.com',
   passwordHash: '$2b$12$hashedpassword',
   name: 'Test User',
+  isGuest: false,
+  guestExpiry: null,
   createdAt: NOW,
 }
 
@@ -28,6 +30,7 @@ const PUBLIC_USER = {
   id: 'user-1',
   email: 'test@example.com',
   name: 'Test User',
+  isGuest: false,
   createdAt: NOW,
 }
 
@@ -36,6 +39,11 @@ function makeMockRepo(): AuthRepository {
     findByEmail: vi.fn(),
     findById: vi.fn(),
     create: vi.fn(),
+    createGuest: vi.fn(),
+    findGuestById: vi.fn(),
+    convertGuestToUser: vi.fn(),
+    mergeAndDeleteGuest: vi.fn(),
+    deleteExpiredGuests: vi.fn(),
   } as unknown as AuthRepository
 }
 

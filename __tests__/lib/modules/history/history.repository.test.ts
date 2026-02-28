@@ -100,14 +100,12 @@ describe('HistoryRepository', () => {
     it('runs findMany and count in parallel (Promise.all)', async () => {
       // Both mocks should be called without one waiting for the other
       const findManyOrder: string[] = []
-      vi.mocked(prisma.comparison.findMany).mockImplementation(async () => {
-        findManyOrder.push('findMany')
-        return []
-      })
-      vi.mocked(prisma.comparison.count).mockImplementation(async () => {
-        findManyOrder.push('count')
-        return 0
-      })
+      vi.mocked(prisma.comparison.findMany).mockImplementation(
+        (async () => { findManyOrder.push('findMany'); return [] }) as never,
+      )
+      vi.mocked(prisma.comparison.count).mockImplementation(
+        (async () => { findManyOrder.push('count'); return 0 }) as never,
+      )
 
       await repo.findAllByUser('user-1', 1, 20)
 
@@ -214,7 +212,7 @@ describe('HistoryRepository', () => {
       // Only ONE prisma.comparison.create call for all responses
       expect(prisma.comparison.create).toHaveBeenCalledTimes(1)
       const call = vi.mocked(prisma.comparison.create).mock.calls[0][0]
-      expect(call.data.responses.create).toHaveLength(2)
+      expect((call.data!.responses as { create: unknown[] }).create).toHaveLength(2)
     })
   })
 

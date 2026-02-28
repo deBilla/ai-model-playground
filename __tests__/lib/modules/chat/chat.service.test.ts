@@ -37,7 +37,7 @@ describe('ChatService', () => {
 
         const dto = {
             prompt: 'Hello AI',
-            provider: 'openai',
+            provider: 'openai' as const,
             temperature: 0.7,
             maxTokens: 1024
         }

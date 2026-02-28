@@ -75,6 +75,10 @@ export class HistoryService {
     return toRecord(comparison)
   }
 
+  async countByUser(userId: string): Promise<number> {
+    return this.repository.countByUser(userId)
+  }
+
   async delete(userId: string, id: string): Promise<boolean> {
     const result = await this.repository.deleteByIdAndUser(id, userId)
     return result.count > 0

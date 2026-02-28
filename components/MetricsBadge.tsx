@@ -1,7 +1,6 @@
 'use client'
 
 import { memo } from 'react'
-import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatCost } from '@/lib/models.config'
 
@@ -19,6 +18,23 @@ function formatMs(ms: number) {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(2)}s`
 }
 
+function Pill({ children, tooltip, color = 'text-neutral-300' }: {
+  children: React.ReactNode
+  tooltip: string
+  color?: string
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={`inline-flex items-center gap-1 rounded-md border border-neutral-700 bg-neutral-800 px-2 py-0.5 font-mono text-xs cursor-default select-none ${color}`}>
+          {children}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 const MetricsBadge = memo(function MetricsBadge({
   promptTokens,
   completionTokens,
@@ -30,56 +46,29 @@ const MetricsBadge = memo(function MetricsBadge({
 }: MetricsBadgeProps) {
   return (
     <TooltipProvider>
-      <div className="flex flex-wrap gap-1.5 pt-3 border-t border-neutral-700">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge variant="secondary" className="font-mono cursor-default">
-              {totalTokens.toLocaleString()} tok
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>
-            {promptTokens} prompt + {completionTokens} completion
-          </TooltipContent>
-        </Tooltip>
+      <div className="flex flex-wrap gap-1.5 pt-2.5 border-t border-neutral-700/60">
+        <Pill tooltip={`${promptTokens.toLocaleString()} prompt + ${completionTokens.toLocaleString()} completion`}>
+          {totalTokens.toLocaleString()} tok
+        </Pill>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge variant="secondary" className="font-mono cursor-default text-emerald-400">
-              {formatCost(estimatedCost)}
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>Estimated cost</TooltipContent>
-        </Tooltip>
+        <Pill tooltip="Estimated cost" color="text-emerald-400">
+          {formatCost(estimatedCost)}
+        </Pill>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge variant="secondary" className="font-mono cursor-default text-sky-400">
-              {formatMs(latencyMs)}
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>Total latency</TooltipContent>
-        </Tooltip>
+        <Pill tooltip="Total latency" color="text-sky-400">
+          {formatMs(latencyMs)}
+        </Pill>
 
         {timeToFirstToken != null && timeToFirstToken > 0 && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Badge variant="secondary" className="font-mono cursor-default text-violet-400">
-                TTFT {formatMs(timeToFirstToken)}
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>Time to first token</TooltipContent>
-          </Tooltip>
+          <Pill tooltip="Time to first token" color="text-violet-400">
+            TTFT {formatMs(timeToFirstToken)}
+          </Pill>
         )}
 
         {tokensPerSecond != null && tokensPerSecond > 0 && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Badge variant="secondary" className="font-mono cursor-default text-amber-400">
-                {tokensPerSecond.toFixed(1)} tok/s
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>Tokens per second</TooltipContent>
-          </Tooltip>
+          <Pill tooltip="Tokens per second" color="text-amber-400">
+            {tokensPerSecond.toFixed(1)} tok/s
+          </Pill>
         )}
       </div>
     </TooltipProvider>

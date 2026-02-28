@@ -44,6 +44,12 @@ interface PlaygroundStore {
   setUser: (u: User) => void
   clearUser: () => void
 
+  guestComparisonCount: number
+  setGuestComparisonCount: (n: number) => void
+
+  showAuthModal: boolean
+  setShowAuthModal: (show: boolean) => void
+
   chatSettings: ChatSettings
   setChatSettings: (s: Partial<ChatSettings>) => void
 
@@ -79,6 +85,12 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
   user: null,
   setUser: (u) => set({ user: u }),
   clearUser: () => set({ user: null }),
+
+  guestComparisonCount: 0,
+  setGuestComparisonCount: (n) => set({ guestComparisonCount: n }),
+
+  showAuthModal: false,
+  setShowAuthModal: (show) => set({ showAuthModal: show }),
 
   chatSettings: { temperature: 1.0, maxTokens: 2048 },
   setChatSettings: (s) =>

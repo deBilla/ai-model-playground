@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { chatService } from '@/lib/modules/chat'
 import { ChatRequestSchema } from '@/lib/modules/chat/chat.dto'
 import { buildNdjsonStream } from '@/lib/modules/chat/buildNdjsonStream'
-import { getUserFromRequest, unauthorized } from '@/lib/auth'
+import { getUserFromRequest, getGuestFromRequest, unauthorized } from '@/lib/auth'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -13,7 +13,7 @@ export const maxDuration = 60
  * Each line: { t: 'text'|'meta'|'error', provider, ...fields }
  */
 export async function POST(req: NextRequest) {
-  const userId = getUserFromRequest(req)
+  const userId = getUserFromRequest(req) ?? getGuestFromRequest(req)
   if (!userId) return unauthorized()
 
   let body: unknown

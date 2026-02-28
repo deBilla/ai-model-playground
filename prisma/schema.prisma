@@ -12,13 +12,16 @@ datasource db {
 
 model User {
   id           String       @id @default(cuid())
-  email        String       @unique
-  passwordHash String
+  email        String?      @unique
+  passwordHash String?
   name         String?
+  isGuest      Boolean      @default(false)
+  guestExpiry  DateTime?
   createdAt    DateTime     @default(now())
   comparisons  Comparison[]
 
   @@index([email])
+  @@index([guestExpiry])
 }
 
 model Comparison {

@@ -12,6 +12,10 @@ export function useStream() {
   const resetPanels = usePlaygroundStore((s) => s.resetPanels)
   const addToHistory = usePlaygroundStore((s) => s.addToHistory)
   const chatSettings = usePlaygroundStore((s) => s.chatSettings)
+  const user = usePlaygroundStore((s) => s.user)
+  const guestComparisonCount = usePlaygroundStore((s) => s.guestComparisonCount)
+  const setGuestComparisonCount = usePlaygroundStore((s) => s.setGuestComparisonCount)
+  const setShowAuthModal = usePlaygroundStore((s) => s.setShowAuthModal)
   const isRunning = useRef(false)
 
   const run = useCallback(
@@ -50,12 +54,20 @@ export function useStream() {
         if (res.ok) {
           const record: ComparisonRecord = await res.json()
           addToHistory(record)
+          if (user?.isGuest) {
+            setGuestComparisonCount(guestComparisonCount + 1)
+          }
+        } else if (res.status === 403) {
+          const data = await res.json().catch(() => ({}))
+          if ((data as { limitReached?: boolean }).limitReached) {
+            setShowAuthModal(true)
+          }
         }
       } catch (err) {
         console.error('[save comparison]', err)
       }
     },
-    [setPanelState, resetPanels, addToHistory, chatSettings],
+    [setPanelState, resetPanels, addToHistory, chatSettings, user, guestComparisonCount, setGuestComparisonCount, setShowAuthModal],
   )
 
   const stop = useCallback(() => {

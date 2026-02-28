@@ -2,8 +2,9 @@ import type { ProviderId } from './models.config'
 
 export type User = {
   id: string
-  email: string
+  email: string | null
   name: string | null
+  isGuest: boolean
   createdAt: string
 }
 
