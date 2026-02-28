@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom'
+import { vi } from 'vitest'
 
 // Browser API mocks — only needed in jsdom (component tests).
 // Node-environment tests (API/service tests) skip these guards.
