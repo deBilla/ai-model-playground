@@ -65,6 +65,26 @@ ai-model-playground/
 │   ├── models.config.ts          # Single source of truth for all models
 │   └── store.ts                  # Zustand store for app state
 │
+├── __tests__/
+│   ├── components/               # Unit tests: UI components (Vitest + RTL)
+│   │   ├── AuthModal.test.tsx
+│   │   ├── HistoryDrawer.test.tsx
+│   │   ├── MetricsBadge.test.tsx
+│   │   └── UpgradeBanner.test.tsx
+│   ├── api/                      # Unit tests: API route handlers
+│   └── lib/                      # Unit tests: services, repositories, utilities
+│
+├── e2e/                          # End-to-end tests (Playwright / Chromium)
+│   ├── auth.spec.ts              # Registration, login, logout flows
+│   ├── compare.spec.ts           # Prompt input, model panels, history drawer
+│   ├── guest.spec.ts             # Guest session behaviour
+│   ├── history.spec.ts           # History drawer open/close, empty state
+│   └── settings.spec.ts          # Settings panel sliders
+│
+├── .github/
+│   └── workflows/
+│       └── ci.yml                # CI: lint → unit tests → E2E → deploy
+│
 └── prisma/
     └── schema.prisma             # DB schema (PostgreSQL)
 
@@ -132,7 +152,76 @@ DATABASE_PROVIDER=postgresql DATABASE_URL=<prod-url> npx prisma migrate deploy
 
 4. Deploy the application. Vercel will automatically run `npm run build`.
 
-## Technical Decisions and Tradeoffs
+## Testing
+
+The project has two layers of automated tests: **unit tests** (fast, no network) and **end-to-end tests** (full browser + real database).
+
+### Unit Tests — Vitest + React Testing Library
+
+Unit tests cover API route handlers, domain services, repositories, and UI components. They run entirely in-process with no external dependencies.
+
+```bash
+npm test              # run once
+npm run test:watch    # watch mode
+```
+
+**Coverage (~174 tests):**
+
+| Area | What is tested |
+|---|---|
+| `__tests__/api/` | Route handlers (auth, comparisons, chats, guest, shares) |
+| `__tests__/lib/modules/` | Auth service/repo, chat service, history service/repo |
+| `__tests__/lib/` | `models.config`, cost calculation, token formatting |
+| `__tests__/components/` | `MetricsBadge`, `UpgradeBanner`, `AuthModal`, `HistoryDrawer` |
+
+### End-to-End Tests — Playwright (Chromium)
+
+E2E tests run against a locally built production server (`npm run build && npm start`) connected to the real Supabase database. All tests use a fresh registered user per test file, and streaming tests are skipped because they require live AI gateway traffic.
+
+```bash
+npm run test:e2e          # headless
+npm run test:e2e:ui       # Playwright UI mode (step-through debugger)
+```
+
+**Coverage (51 tests, 2 skipped):**
+
+| Spec | What is tested |
+|---|---|
+| `auth.spec.ts` | Page load without modal, login form validation, register, login, logout |
+| `compare.spec.ts` | Prompt textarea, Compare button state, character count, model subtitle, history drawer |
+| `guest.spec.ts` | Guest session: no modal, no logout button, prompt accessible, upgrade banner threshold |
+| `history.spec.ts` | Trigger button, drawer open/close, Escape key, empty state (guest + authed), share 404 |
+| `settings.spec.ts` | Panel toggle, temperature slider, max-tokens slider, keyboard interaction, persistence |
+
+> **Database note:** E2E tests create real user accounts (`auth-*@example.com`, `compare-*@example.com`, etc.) in Supabase using `Date.now()`-suffixed emails to prevent conflicts across runs.
+
+### CI / CD — GitHub Actions
+
+Every push to `main` and every pull request runs three parallel jobs before anything is deployed:
+
+```
+push / PR
+    │
+    ├── Lint ──────────────────────┐
+    ├── Unit Tests ────────────────┼──► Deploy to Vercel  (main branch only,
+    └── E2E Tests ─────────────────┘    after all three pass)
+```
+
+The workflow lives in `.github/workflows/ci.yml`. Required GitHub Secrets:
+
+| Secret | Description |
+|---|---|
+| `DATABASE_URL` | Supabase pgbouncer URL (port 6543) with `&pgbouncer=true` |
+| `POSTGRES_URL` | Supabase direct URL (port 5432) |
+| `JWT_SECRET` | Token signing secret |
+| `VERCEL_AI_GATEWAY_KEY` | Vercel AI gateway API key |
+| `VERCEL_TOKEN` | Vercel personal access token |
+| `VERCEL_ORG_ID` | Vercel user ID (personal accounts) or team ID |
+| `VERCEL_PROJECT_ID` | Vercel project ID |
+
+If a Playwright run fails in CI, the `test-results/` directory is uploaded as a workflow artifact (retained for 7 days) so you can inspect screenshots and traces.
+
+
 
 * **Config-Driven Providers vs Individual Files**
  **Chosen:** A single `models.config.ts` file acting as the source of truth for all models.
@@ -180,7 +269,3 @@ Instead of holding open `POST` requests while waiting for the AI Gateway, the ar
 
 * **Semantic Caching:** Implementing a vector database (`pgvector`) to cache responses based on the *meaning* of the prompt, bypassing the AI Gateway entirely for similar repeated queries.
 * **Edge Caching:** Pushing static configurations to a CDN or Redis Edge layer.
-
-### 5. Database Connection Pooling
-
-Implementing **PgBouncer** alongside the Kubernetes cluster to manage database connections efficiently, preventing connection exhaustion during traffic spikes.
