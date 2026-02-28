@@ -7,6 +7,9 @@
  * - Exposes temperature and max-tokens sliders with correct initial values
  * - Updates the displayed value when the slider is changed via keyboard
  *
+ * Note: Radix Slider's Thumb (role="slider") does not inherit aria-label from
+ * the Root, so sliders are located by position (first = temperature, last = max tokens).
+ *
  * Run: npx playwright test e2e/settings.spec.ts
  */
 import { test, expect, type Page } from '@playwright/test'
@@ -16,25 +19,26 @@ const TEST_PASSWORD = 'Str0ngP@ss!'
 
 async function loginAs(page: Page, email: string, password: string) {
   await page.goto('/')
-  // Open auth modal via "Sign in" header button
   await page.getByRole('button', { name: /sign in/i }).first().click()
   await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 3000 })
 
-  try {
-    // Try to register first (fresh test run)
-    await page.getByText('Create one free').click()
+  // Try to register; detect duplicate email instantly via Promise.race
+  await page.getByText('Create one free').click()
+  await page.getByLabel(/email/i).fill(email)
+  await page.getByLabel(/^password/i).fill(password)
+  await page.getByRole('button', { name: /create account/i }).click()
+
+  const outcome = await Promise.race([
+    page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 8000 }).then(() => 'registered' as const),
+    page.getByText('Email already in use').waitFor({ state: 'visible', timeout: 8000 }).then(() => 'exists' as const),
+  ])
+
+  if (outcome === 'exists') {
+    // Switch to login form inside the dialog
+    await page.getByRole('dialog').getByRole('button', { name: /^sign in$/i }).click()
     await page.getByLabel(/email/i).fill(email)
     await page.getByLabel(/^password/i).fill(password)
-    await page.getByRole('button', { name: /create account/i }).click()
-    await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 5000 })
-  } catch {
-    // Already registered — log in instead
-    await page.goto('/')
-    await page.getByRole('button', { name: /sign in/i }).first().click()
-    await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 3000 })
-    await page.getByLabel(/email/i).fill(email)
-    await page.getByLabel(/^password/i).fill(password)
-    await page.getByRole('button', { name: /^sign in$/i }).click()
+    await page.getByRole('dialog').getByRole('button', { name: /^sign in$/i }).click()
     await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 5000 })
   }
 }
@@ -65,11 +69,9 @@ test.describe('Settings panel', () => {
     await page.getByRole('button', { name: /settings/i }).click()
     const panel = page.getByRole('region', { name: /generation settings/i })
 
-    // Temperature label
     await expect(panel.getByText('Temperature')).toBeVisible()
-    // Slider control
-    await expect(panel.getByRole('slider', { name: /temperature/i })).toBeVisible()
-    // Default value shown
+    // Temperature is the first slider in the panel
+    await expect(panel.getByRole('slider').first()).toBeVisible()
     await expect(panel.getByText('1.00')).toBeVisible()
   })
 
@@ -78,14 +80,17 @@ test.describe('Settings panel', () => {
     const panel = page.getByRole('region', { name: /generation settings/i })
 
     await expect(panel.getByText('Max Tokens')).toBeVisible()
-    await expect(panel.getByRole('slider', { name: /max tokens/i })).toBeVisible()
+    // Max tokens is the last slider in the panel
+    await expect(panel.getByRole('slider').last()).toBeVisible()
     // Default 2048 tokens
     await expect(panel.getByText('2,048')).toBeVisible()
   })
 
   test('keyboard ArrowLeft on temperature slider decreases its displayed value', async ({ page }) => {
     await page.getByRole('button', { name: /settings/i }).click()
-    const slider = page.getByRole('slider', { name: /temperature/i })
+    const panel = page.getByRole('region', { name: /generation settings/i })
+    // Temperature is the first slider in the panel
+    const slider = panel.getByRole('slider').first()
     await slider.focus()
 
     // Press arrow left 10 times — each step is 0.01, so -0.10 from 1.00 → 0.90
@@ -93,15 +98,14 @@ test.describe('Settings panel', () => {
       await slider.press('ArrowLeft')
     }
 
-    // The displayed value should now be 0.90
-    const panel = page.getByRole('region', { name: /generation settings/i })
     await expect(panel.getByText('0.90')).toBeVisible()
   })
 
   test('keyboard ArrowRight on max-tokens slider increases its displayed value', async ({ page }) => {
     await page.getByRole('button', { name: /settings/i }).click()
     const panel = page.getByRole('region', { name: /generation settings/i })
-    const slider = panel.getByRole('slider', { name: /max tokens/i })
+    // Max tokens is the last slider in the panel
+    const slider = panel.getByRole('slider').last()
     await slider.focus()
 
     // Each step is 64 tokens; press 4 times → +256 from 2048 → 2304
@@ -115,7 +119,8 @@ test.describe('Settings panel', () => {
   test('settings persist across Settings panel open/close cycles', async ({ page }) => {
     await page.getByRole('button', { name: /settings/i }).click()
     const panel = page.getByRole('region', { name: /generation settings/i })
-    const tempSlider = panel.getByRole('slider', { name: /temperature/i })
+    // Temperature is the first slider
+    const tempSlider = panel.getByRole('slider').first()
 
     await tempSlider.focus()
     await tempSlider.press('ArrowLeft')  // 1.00 → 0.99

@@ -14,7 +14,6 @@ const TEST_PASSWORD = 'Str0ngP@ss!'
 
 async function login(page: Page) {
   await page.goto('/')
-  // Click the header "Sign in" button to open the auth modal
   await page.getByRole('button', { name: /sign in/i }).first().click()
   await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 3000 })
   // Switch to register form
@@ -22,7 +21,21 @@ async function login(page: Page) {
   await page.getByLabel(/email/i).fill(TEST_EMAIL)
   await page.getByLabel(/^password/i).fill(TEST_PASSWORD)
   await page.getByRole('button', { name: /create account/i }).click()
-  await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 5000 })
+
+  // Race: either the dialog closes (success) or the "Email already in use" error appears
+  const outcome = await Promise.race([
+    page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 8000 }).then(() => 'registered' as const),
+    page.getByText('Email already in use').waitFor({ state: 'visible', timeout: 8000 }).then(() => 'exists' as const),
+  ])
+
+  if (outcome === 'exists') {
+    // Click the "Sign in" switch link inside the dialog to go to login form
+    await page.getByRole('dialog').getByRole('button', { name: /^sign in$/i }).click()
+    await page.getByLabel(/email/i).fill(TEST_EMAIL)
+    await page.getByLabel(/^password/i).fill(TEST_PASSWORD)
+    await page.getByRole('dialog').getByRole('button', { name: /^sign in$/i }).click()
+    await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 5000 })
+  }
 }
 
 test.describe('Prompt input', () => {
@@ -50,17 +63,19 @@ test.describe('Prompt input', () => {
     await expect(page.getByText('11 characters')).toBeVisible()
   })
 
-  test('Cmd+Enter submits the prompt (starts streaming)', async ({ page }) => {
+  test.skip('Cmd+Enter submits the prompt (starts streaming)', async ({ page }) => {
+    // Requires VERCEL_AI_GATEWAY_KEY and live AI gateway connectivity
     await page.getByPlaceholder(/enter your prompt/i).fill('Say hi')
     await page.keyboard.press('Meta+Enter')
     // Stop button should appear while streaming
-    await expect(page.getByRole('button', { name: /stop/i })).toBeVisible({ timeout: 3000 })
+    await expect(page.getByRole('button', { name: /stop/i })).toBeVisible({ timeout: 5000 })
   })
 
-  test('Stop button aborts streams and disappears', async ({ page }) => {
+  test.skip('Stop button aborts streams and disappears', async ({ page }) => {
+    // Requires VERCEL_AI_GATEWAY_KEY and live AI gateway connectivity
     await page.getByPlaceholder(/enter your prompt/i).fill('Count to 1000')
     await page.getByRole('button', { name: /compare models/i }).click()
-    await expect(page.getByRole('button', { name: /stop/i })).toBeVisible({ timeout: 3000 })
+    await expect(page.getByRole('button', { name: /stop/i })).toBeVisible({ timeout: 5000 })
 
     await page.getByRole('button', { name: /stop/i }).click()
     await expect(page.getByRole('button', { name: /stop/i })).not.toBeVisible({ timeout: 3000 })
@@ -75,9 +90,12 @@ test.describe('Header and navigation', () => {
 
   test('shows model names in the subtitle', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByText(/GPT-4o/i)).toBeVisible()
-    await expect(page.getByText(/Claude/i)).toBeVisible()
-    await expect(page.getByText(/Grok/i)).toBeVisible()
+    // The header <p> subtitle lists all model labels joined by ·
+    // Scope to header to avoid matching model panel headings
+    const subtitle = page.locator('header p')
+    await expect(subtitle).toContainText('GPT-4o')
+    await expect(subtitle).toContainText('Claude')
+    await expect(subtitle).toContainText('Grok')
   })
 })
 
@@ -92,9 +110,7 @@ test.describe('History drawer', () => {
 
   test('clicking History opens the drawer', async ({ page }) => {
     await page.getByRole('button', { name: /open comparison history/i }).click()
-    await expect(page.getByRole('dialog', { name: /comparison history/i }).or(
-      page.getByText('Comparison History')
-    )).toBeVisible({ timeout: 3000 })
+    await expect(page.getByRole('heading', { name: 'Comparison History' })).toBeVisible({ timeout: 3000 })
   })
 
   test('empty history shows a prompt to run first comparison', async ({ page }) => {

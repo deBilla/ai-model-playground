@@ -40,28 +40,33 @@ test.describe('History trigger', () => {
 })
 
 test.describe('Drawer open/close', () => {
+  // Use the SheetTitle heading to avoid strict-mode violation with "comparison history"
+  // appearing inside the "Sign in to view your comparison history." message.
+  const historyHeading = (page: import('@playwright/test').Page) =>
+    page.getByRole('heading', { name: 'Comparison History' })
+
   test('clicking trigger opens the drawer', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: /open comparison history/i }).click()
-    await expect(page.getByText('Comparison History')).toBeVisible({ timeout: 3000 })
+    await expect(historyHeading(page)).toBeVisible({ timeout: 3000 })
   })
 
   test('drawer can be closed via the Radix close button', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: /open comparison history/i }).click()
-    await page.getByText('Comparison History').waitFor({ state: 'visible', timeout: 3000 })
+    await historyHeading(page).waitFor({ state: 'visible', timeout: 3000 })
 
-    // Radix SheetContent renders a close button (×)
-    await page.getByRole('button', { name: /close/i }).click()
-    await expect(page.getByText('Comparison History')).not.toBeVisible({ timeout: 3000 })
+    // Radix SheetContent renders a close button with a sr-only "Close" label
+    await page.getByRole('button', { name: /^close$/i }).click()
+    await expect(historyHeading(page)).not.toBeVisible({ timeout: 3000 })
   })
 
   test('pressing Escape closes the drawer', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: /open comparison history/i }).click()
-    await page.getByText('Comparison History').waitFor({ state: 'visible', timeout: 3000 })
+    await historyHeading(page).waitFor({ state: 'visible', timeout: 3000 })
     await page.keyboard.press('Escape')
-    await expect(page.getByText('Comparison History')).not.toBeVisible({ timeout: 3000 })
+    await expect(historyHeading(page)).not.toBeVisible({ timeout: 3000 })
   })
 })
 
