@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authService } from '@/lib/modules/auth'
 import { getUserFromRequest, unauthorized } from '@/lib/auth'
+import { withRateLimit } from '@/lib/rateLimiter'
 
-export async function GET(req: NextRequest) {
+async function getHandler(req: NextRequest) {
   const userId = getUserFromRequest(req)
   if (!userId) return unauthorized()
 
@@ -11,3 +12,5 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ user })
 }
+
+export const GET = withRateLimit(getHandler, 'lenient', 'auth:me')

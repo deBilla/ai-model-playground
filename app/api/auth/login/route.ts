@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authService } from '@/lib/modules/auth'
 import { LoginRequestSchema } from '@/lib/modules/auth/auth.dto'
 import { signToken, setSessionCookie, getGuestFromRequest, clearGuestCookie } from '@/lib/auth'
+import { withRateLimit } from '@/lib/rateLimiter'
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest) {
   let body: unknown
   try { body = await req.json() } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
@@ -33,3 +34,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 401 })
   }
 }
+
+export const POST = withRateLimit(postHandler, 'strict', 'auth:login')

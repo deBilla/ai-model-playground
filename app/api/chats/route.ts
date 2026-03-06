@@ -3,16 +3,12 @@ import { chatService } from '@/lib/modules/chat'
 import { ChatRequestSchema } from '@/lib/modules/chat/chat.dto'
 import { buildNdjsonStream } from '@/lib/modules/chat/buildNdjsonStream'
 import { getUserFromRequest, getGuestFromRequest, unauthorized } from '@/lib/auth'
+import { withRateLimit } from '@/lib/rateLimiter'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-/**
- * POST /api/chats
- * Streams one provider response via NDJSON protocol.
- * Each line: { t: 'text'|'meta'|'error', provider, ...fields }
- */
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest) {
   const userId = getUserFromRequest(req) ?? getGuestFromRequest(req)
   if (!userId) return unauthorized()
 
@@ -35,3 +31,5 @@ export async function POST(req: NextRequest) {
     },
   })
 }
+
+export const POST = withRateLimit(postHandler, 'moderate', 'chats')

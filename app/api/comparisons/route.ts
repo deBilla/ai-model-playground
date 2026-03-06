@@ -3,6 +3,7 @@ import { historyService } from '@/lib/modules/history'
 import { CreateComparisonSchema, ListComparisonsSchema } from '@/lib/modules/history/history.dto'
 import { getUserFromRequest, getGuestFromRequest, unauthorized } from '@/lib/auth'
 import { GUEST_COMPARISON_LIMIT } from '@/lib/constants'
+import { withRateLimit } from '@/lib/rateLimiter'
 import type { ComparisonRecord } from '@/lib/types'
 
 const err = (msg: string, status: number) => NextResponse.json({ error: msg }, { status })
@@ -11,7 +12,7 @@ function stripShareToken(record: ComparisonRecord): ComparisonRecord {
   return { ...record, shareToken: null }
 }
 
-export async function GET(req: NextRequest) {
+async function getHandler(req: NextRequest) {
   const sessionUserId = getUserFromRequest(req)
   const guestUserId = sessionUserId ? null : getGuestFromRequest(req)
   const userId = sessionUserId ?? guestUserId
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
   } catch { return err('Failed to fetch comparisons', 500) }
 }
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest) {
   const sessionUserId = getUserFromRequest(req)
   const guestUserId = sessionUserId ? null : getGuestFromRequest(req)
   const userId = sessionUserId ?? guestUserId
@@ -59,3 +60,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(response, { status: 201 })
   } catch { return err('Failed to save comparison', 500) }
 }
+
+export const GET = withRateLimit(getHandler, 'lenient', 'comparisons:get')
+export const POST = withRateLimit(postHandler, 'moderate', 'comparisons:post')

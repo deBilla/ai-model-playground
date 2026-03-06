@@ -7,6 +7,7 @@ import {
   signGuestToken,
   setGuestCookie,
 } from '@/lib/auth'
+import { withRateLimit } from '@/lib/rateLimiter'
 
 /**
  * POST /api/guest/init
@@ -15,7 +16,7 @@ import {
  *   2. Valid guestId cookie  → return guest user, count: N
  *   3. Neither              → create guest, set guestId cookie, return guest, count: 0
  */
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest) {
   // 1. Real authenticated user
   const sessionUserId = getUserFromRequest(req)
   if (sessionUserId) {
@@ -42,3 +43,5 @@ export async function POST(req: NextRequest) {
   setGuestCookie(res, token)
   return res
 }
+
+export const POST = withRateLimit(postHandler, 'lenient', 'guest:init')
