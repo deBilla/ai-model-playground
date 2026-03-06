@@ -26,7 +26,7 @@ export default function HomeClient() {
   const user = usePlaygroundStore((s) => s.user)
   const { run, stop } = useStream()
 
-  useEffect(() => {
+  const initGuestSession = useCallback(() => {
     fetch('/api/guest/init', { method: 'POST' })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
@@ -38,21 +38,17 @@ export default function HomeClient() {
       .catch(() => {})
   }, [setUser, setGuestComparisonCount])
 
+  useEffect(() => {
+    initGuestSession()
+  }, [initGuestSession])
+
   const handleLogout = useCallback(async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' })
     } catch { /* ignore */ }
     clearUser()
-    fetch('/api/guest/init', { method: 'POST' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.user) {
-          setUser(data.user as User)
-          setGuestComparisonCount(data.guestComparisonCount ?? 0)
-        }
-      })
-      .catch(() => {})
-  }, [clearUser, setUser, setGuestComparisonCount])
+    initGuestSession()
+  }, [clearUser, initGuestSession])
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">

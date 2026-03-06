@@ -35,6 +35,27 @@ function parseLine(line: string): StreamLine | null {
   }
 }
 
+type LineCtx = { streamedText: string; metrics: PanelState['metrics'] | undefined }
+
+function applyParsedLine(parsed: StreamLine, ctx: LineCtx): void {
+  if (parsed.t === 'text') {
+    ctx.streamedText += parsed.v
+  } else if (parsed.t === 'meta') {
+    ctx.metrics = {
+      promptTokens: parsed.promptTokens,
+      completionTokens: parsed.completionTokens,
+      totalTokens: parsed.totalTokens,
+      latencyMs: parsed.latencyMs,
+      estimatedCost: parsed.estimatedCost,
+      timeToFirstToken: parsed.timeToFirstToken,
+      tokensPerSecond: parsed.tokensPerSecond,
+      responseLength: parsed.responseLength,
+    }
+  } else if (parsed.t === 'error') {
+    throw Object.assign(new Error(parsed.v), { isRateLimit: parsed.isRateLimit ?? false })
+  }
+}
+
 // One AbortController per provider — cancels any in-flight request when a
 // new comparison starts, preventing stale chunks from polluting new panels.
 const activeControllers = new Map<ProviderId, AbortController>()
@@ -84,8 +105,7 @@ export async function streamProvider(
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
-    let streamedText = ''
-    let metrics: PanelState['metrics'] | undefined
+    const ctx: LineCtx = { streamedText: '', metrics: undefined }
 
     while (true) {
       const { done, value } = await reader.read()
@@ -100,64 +120,32 @@ export async function streamProvider(
         if (!parsed) continue
         // Verify provider matches to prevent stale cross-contamination
         if (parsed.provider && parsed.provider !== provider) continue
-
-        if (parsed.t === 'text') {
-          streamedText += parsed.v
-          setPanelState(provider, { streamedText })
-        } else if (parsed.t === 'meta') {
-          metrics = {
-            promptTokens: parsed.promptTokens,
-            completionTokens: parsed.completionTokens,
-            totalTokens: parsed.totalTokens,
-            latencyMs: parsed.latencyMs,
-            estimatedCost: parsed.estimatedCost,
-            timeToFirstToken: parsed.timeToFirstToken,
-            tokensPerSecond: parsed.tokensPerSecond,
-            responseLength: parsed.responseLength,
-          }
-        } else if (parsed.t === 'error') {
-          throw Object.assign(new Error(parsed.v), { isRateLimit: parsed.isRateLimit ?? false })
-        }
+        applyParsedLine(parsed, ctx)
+        if (parsed.t === 'text') setPanelState(provider, { streamedText: ctx.streamedText })
       }
     }
 
     // Flush remaining buffer
     if (buffer.trim()) {
       const parsed = parseLine(buffer)
-      if (parsed && parsed.provider === provider) {
-        if (parsed.t === 'text') streamedText += parsed.v
-        else if (parsed.t === 'meta') {
-          metrics = {
-            promptTokens: parsed.promptTokens,
-            completionTokens: parsed.completionTokens,
-            totalTokens: parsed.totalTokens,
-            latencyMs: parsed.latencyMs,
-            estimatedCost: parsed.estimatedCost,
-            timeToFirstToken: parsed.timeToFirstToken,
-            tokensPerSecond: parsed.tokensPerSecond,
-            responseLength: parsed.responseLength,
-          }
-        } else if (parsed.t === 'error') {
-          throw Object.assign(new Error(parsed.v), { isRateLimit: parsed.isRateLimit ?? false })
-        }
-      }
+      if (parsed && parsed.provider === provider) applyParsedLine(parsed, ctx)
     }
 
-    setPanelState(provider, { status: 'done', metrics })
+    setPanelState(provider, { status: 'done', metrics: ctx.metrics })
 
     const model = getModel(provider)
     return {
       provider,
       label: model?.label ?? provider,
-      responseText: streamedText,
-      promptTokens: metrics?.promptTokens ?? 0,
-      completionTokens: metrics?.completionTokens ?? 0,
-      totalTokens: metrics?.totalTokens ?? 0,
-      latencyMs: metrics?.latencyMs ?? 0,
-      estimatedCost: metrics?.estimatedCost ?? 0,
-      timeToFirstToken: metrics?.timeToFirstToken ?? 0,
-      tokensPerSecond: metrics?.tokensPerSecond ?? 0,
-      responseLength: metrics?.responseLength ?? 0,
+      responseText: ctx.streamedText,
+      promptTokens: ctx.metrics?.promptTokens ?? 0,
+      completionTokens: ctx.metrics?.completionTokens ?? 0,
+      totalTokens: ctx.metrics?.totalTokens ?? 0,
+      latencyMs: ctx.metrics?.latencyMs ?? 0,
+      estimatedCost: ctx.metrics?.estimatedCost ?? 0,
+      timeToFirstToken: ctx.metrics?.timeToFirstToken ?? 0,
+      tokensPerSecond: ctx.metrics?.tokensPerSecond ?? 0,
+      responseLength: ctx.metrics?.responseLength ?? 0,
     }
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') return null

@@ -46,44 +46,40 @@ export function getGuestFromRequest(request: NextRequest): string | null {
   return payload.sub
 }
 
-export function setSessionCookie(response: NextResponse, token: string): void {
-  response.cookies.set(COOKIE_NAME, token, {
+function setCookie(name: string, token: string, response: NextResponse): void {
+  response.cookies.set(name, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     maxAge: COOKIE_MAX_AGE,
     path: '/',
   })
+}
+
+function clearCookie(name: string, response: NextResponse): void {
+  response.cookies.set(name, '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 0,
+    path: '/',
+  })
+}
+
+export function setSessionCookie(response: NextResponse, token: string): void {
+  setCookie(COOKIE_NAME, token, response)
 }
 
 export function clearSessionCookie(response: NextResponse): void {
-  response.cookies.set(COOKIE_NAME, '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 0,
-    path: '/',
-  })
+  clearCookie(COOKIE_NAME, response)
 }
 
 export function setGuestCookie(response: NextResponse, token: string): void {
-  response.cookies.set(GUEST_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: COOKIE_MAX_AGE,
-    path: '/',
-  })
+  setCookie(GUEST_COOKIE_NAME, token, response)
 }
 
 export function clearGuestCookie(response: NextResponse): void {
-  response.cookies.set(GUEST_COOKIE_NAME, '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 0,
-    path: '/',
-  })
+  clearCookie(GUEST_COOKIE_NAME, response)
 }
 
 export function unauthorized(): NextResponse {
