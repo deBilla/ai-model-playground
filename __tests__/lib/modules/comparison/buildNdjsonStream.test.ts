@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildNdjsonStream } from '@/lib/modules/chat/buildNdjsonStream'
+import { buildNdjsonStream } from '@/lib/modules/comparison/buildNdjsonStream'
 
 // Helper: drain a ReadableStream into parsed NDJSON frames
 async function drainStream(stream: ReadableStream): Promise<Record<string, unknown>[]> {

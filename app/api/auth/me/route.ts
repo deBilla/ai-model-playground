@@ -1,13 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { authService } from '@/lib/modules/auth'
-import { getUserFromRequest, unauthorized } from '@/lib/auth'
+import { unauthorized } from '@/lib/auth'
+import { withSessionAuth } from '@/lib/route-guards'
 
-export async function GET(req: NextRequest) {
-  const userId = getUserFromRequest(req)
-  if (!userId) return unauthorized()
-
+export const GET = withSessionAuth(async (_req, { userId }) => {
   const user = await authService.me(userId)
   if (!user) return unauthorized()
-
   return NextResponse.json({ user })
-}
+})

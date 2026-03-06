@@ -7,6 +7,7 @@ import { usePlaygroundStore } from '@/lib/store'
 import { GUEST_COMPARISON_LIMIT } from '@/lib/constants'
 import type { User } from '@/lib/types'
 import { ArrowRight, ChevronLeft, Infinity, History, Share2 } from 'lucide-react'
+import { useAuth } from '@/lib/hooks/useAuth'
 
 type View = 'gate' | 'login' | 'register'
 
@@ -101,6 +102,9 @@ function FormScreen({
 
   const switchTo = (v: 'login' | 'register') => { reset(); onSwitchView(v) }
 
+  // Use domain hook for network logic
+  const { login, register } = useAuth()
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrors({})
@@ -109,22 +113,21 @@ function FormScreen({
     if (password.length < 8) { setErrors({ password: ['Password must be at least 8 characters'] }); return }
 
     setLoading(true)
-    const endpoint = view === 'login' ? '/api/auth/login' : '/api/auth/register'
-    const body = view === 'login' ? { email, password } : { email, password, name: name || undefined }
     try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        if (typeof data.error === 'object') { setErrors(data.error) } else { setServerError(data.error ?? 'Something went wrong') }
-        return
+      const user = view === 'login'
+        ? await login(email, password)
+        : await register(email, password, name || undefined)
+      onSuccess(user)
+    } catch (err) {
+      if (err instanceof Error) {
+        setServerError(err.message)
+      } else if (typeof err === 'string') {
+        setServerError(err)
+      } else if (typeof err === 'object' && err !== null) {
+        setErrors(err as FieldErrors)
+      } else {
+        setServerError('Network error — please try again')
       }
-      onSuccess(data.user as User)
-    } catch {
-      setServerError('Network error — please try again')
     } finally {
       setLoading(false)
     }

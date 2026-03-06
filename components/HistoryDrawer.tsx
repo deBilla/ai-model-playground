@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePlaygroundStore } from '@/lib/store'
 import { MODELS, getModel, formatCost } from '@/lib/models.config'
-import type { ComparisonRecord, PaginatedResult } from '@/lib/types'
+import type { ComparisonRecord } from '@/lib/types'
+import { useHistory } from '@/lib/hooks/useHistory'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 const LIMIT = 20
@@ -136,37 +137,60 @@ export default function HistoryDrawer() {
 
   const history = usePlaygroundStore((s) => s.history)
   const setHistory = usePlaygroundStore((s) => s.setHistory)
-  const appendHistory = usePlaygroundStore((s) => s.appendHistory)
   const removeFromHistory = usePlaygroundStore((s) => s.removeFromHistory)
   const setPrompt = usePlaygroundStore((s) => s.setPrompt)
   const setPanelState = usePlaygroundStore((s) => s.setPanelState)
   const user = usePlaygroundStore((s) => s.user)
 
+  const { getHistory, deleteComparison } = useHistory()
+
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const triggerButtonRef = useRef<HTMLButtonElement>(null)
   const controllerRef = useRef<AbortController | null>(null)
+  // Track user identity across renders to distinguish initial load from account switches
+  const prevUserIdRef = useRef<string | null | undefined>(undefined)
+  // Mirror history.length without making it a dependency of the user-watching effect
+  const historyLengthRef = useRef(history.length)
+  historyLengthRef.current = history.length
 
   const fetchPage = useCallback(async (pageNum: number, append = false) => {
     controllerRef.current?.abort()
     const controller = new AbortController()
     controllerRef.current = controller
     try {
-      const res = await fetch(`/api/comparisons?page=${pageNum}&limit=${LIMIT}`, { signal: controller.signal })
-      if (!res.ok) return
-      const result: PaginatedResult<ComparisonRecord> = await res.json()
-      if (append) { appendHistory(result.data) } else { setHistory(result.data) }
-      setHasMore(result.hasMore)
-      setPage(pageNum)
+      const result = await getHistory(pageNum, LIMIT, !append, controller.signal)
+      if (result) {
+        setHasMore(result.hasMore)
+        setPage(pageNum)
+      }
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') console.error('[history fetch]', err)
     }
-  }, [appendHistory, setHistory])
+  }, [getHistory])
 
   useEffect(() => {
-    setHistory([])
+    const prevId = prevUserIdRef.current
+    const currId = user?.id ?? null
+    prevUserIdRef.current = currId
+
+    // Same identity — user object reference changed but it's still the same account.
+    // Happens in StrictMode (double-invoke) and when setUser is called with fresh JSON.
+    if (prevId === currId) return
+
     setPage(1)
     setHasMore(false)
-    if (!user) return
+
+    if (!user) {
+      setHistory([])
+      return () => { controllerRef.current?.abort() }
+    }
+
+    // Skip fetch if HomeClient already pre-loaded history during the parallel init.
+    // prevId===null means we just transitioned from "no user" to a valid user on initial load.
+    if (prevId === null && historyLengthRef.current > 0) return
+
+    // User switched accounts (login/register) — clear stale data before fetching
+    if (prevId !== null) setHistory([])
     setLoading(true)
     fetchPage(1).finally(() => setLoading(false))
     return () => { controllerRef.current?.abort() }
@@ -204,8 +228,9 @@ export default function HistoryDrawer() {
     if (!window.confirm('Delete this comparison?')) return
     setDeletingId(id)
     try {
-      const res = await fetch(`/api/comparisons/${encodeURIComponent(id)}`, { method: 'DELETE' })
-      if (res.ok) { removeFromHistory(id); if (selectedId === id) setSelectedId(null) }
+      await deleteComparison(id)
+      removeFromHistory(id)
+      if (selectedId === id) setSelectedId(null)
     } catch (err) { console.error('[delete comparison]', err) }
     finally { setDeletingId(null) }
   }

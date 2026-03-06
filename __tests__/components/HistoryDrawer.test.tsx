@@ -3,9 +3,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import HistoryDrawer from '@/components/HistoryDrawer'
 import { usePlaygroundStore } from '@/lib/store'
 import type { ComparisonRecord } from '@/lib/types'
+import { useHistory } from '@/lib/hooks/useHistory'
 
 vi.mock('@/lib/store', () => ({
   usePlaygroundStore: vi.fn(),
+}))
+
+const mockGetHistory = vi.fn()
+const mockDeleteComparison = vi.fn()
+
+vi.mock('@/lib/hooks/useHistory', () => ({
+  useHistory: () => ({
+    getHistory: mockGetHistory,
+    deleteComparison: mockDeleteComparison,
+  }),
 }))
 
 const mockSetHistory = vi.fn()
@@ -70,10 +81,13 @@ function setup(overrides: {
 
 // Default fetch mock: returns empty page with no errors
 function mockEmptyFetch() {
-  global.fetch = vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({ data: [], hasMore: false }),
-  } as unknown as Response)
+  mockGetHistory.mockResolvedValue({
+    data: [],
+    hasMore: false,
+    limit: 20,
+    page: 1,
+    total: 0
+  })
 }
 
 describe('HistoryDrawer', () => {
@@ -264,26 +278,13 @@ describe('HistoryDrawer', () => {
         expect(screen.getByRole('button', { name: /^delete:/i })).toBeInTheDocument()
       )
 
-      const deleteFetch = vi.fn()
-      global.fetch = deleteFetch
-
       fireEvent.click(screen.getByRole('button', { name: /^delete:/i }))
-      expect(deleteFetch).not.toHaveBeenCalled()
+      expect(mockDeleteComparison).not.toHaveBeenCalled()
     })
 
     it('calls DELETE API when confirm dialog is accepted', async () => {
       vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
-
-      const deleteFetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({}),
-      } as unknown as Response)
-      global.fetch = vi.fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ data: [], hasMore: false }),
-        } as unknown as Response)
-        .mockImplementation(deleteFetch)
+      mockDeleteComparison.mockResolvedValue(undefined)
 
       setup({ user: REAL_USER, history: [MOCK_RECORD] })
       render(<HistoryDrawer />)
@@ -296,21 +297,13 @@ describe('HistoryDrawer', () => {
       fireEvent.click(screen.getByRole('button', { name: /^delete:/i }))
 
       await waitFor(() => {
-        expect(deleteFetch).toHaveBeenCalledWith(
-          expect.stringContaining('comp-1'),
-          expect.objectContaining({ method: 'DELETE' })
-        )
+        expect(mockDeleteComparison).toHaveBeenCalledWith('comp-1')
       })
     })
 
     it('calls removeFromHistory after successful delete', async () => {
       vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
-      global.fetch = vi.fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ data: [], hasMore: false }),
-        } as unknown as Response)
-        .mockResolvedValueOnce({ ok: true, json: async () => ({}) } as unknown as Response)
+      mockDeleteComparison.mockResolvedValue(undefined)
 
       setup({ user: REAL_USER, history: [MOCK_RECORD] })
       render(<HistoryDrawer />)
@@ -335,9 +328,11 @@ describe('HistoryDrawer', () => {
       render(<HistoryDrawer />)
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/comparisons?page=1'),
-          expect.any(Object)
+        expect(mockGetHistory).toHaveBeenCalledWith(
+          1,
+          20,
+          true,
+          expect.any(AbortSignal)
         )
       })
     })
@@ -348,7 +343,7 @@ describe('HistoryDrawer', () => {
 
       // Wait a tick to give any fetch a chance to fire
       await new Promise((r) => setTimeout(r, 50))
-      expect(global.fetch).not.toHaveBeenCalled()
+      expect(mockGetHistory).not.toHaveBeenCalled()
     })
   })
 })
