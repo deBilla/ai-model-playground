@@ -9,7 +9,7 @@ import { MODELS } from '@/lib/models.config'
 
 // ─── Mock compareStream before importing useStream ────────────────────────────
 vi.mock('@/lib/compareStream', () => ({
-  consumeMultiplexedStream: vi.fn().mockResolvedValue([]),
+  consumeMultiplexedStream: vi.fn().mockResolvedValue({ results: [], limitReached: false }),
   abortCompareStream: vi.fn(),
 }))
 
@@ -36,7 +36,7 @@ describe('useStream — chatSettings forwarding', () => {
   beforeEach(() => {
     resetStore()
     vi.clearAllMocks()
-    mockedConsume.mockResolvedValue([])
+    mockedConsume.mockResolvedValue({ results: [], limitReached: false } as any)
   })
 
   it('passes chatSettings from the store to consumeMultiplexedStream', async () => {
@@ -74,7 +74,7 @@ describe('useStream — chatSettings forwarding', () => {
 
     // Make consumeMultiplexedStream take a tick so we can mutate settings concurrently
     mockedConsume.mockImplementation(
-      () => new Promise((resolve) => setTimeout(() => resolve([]), 0)),
+      () => new Promise((resolve) => setTimeout(() => resolve({ results: [], limitReached: false } as any), 0)),
     )
 
     const { result } = renderHook(() => useStream())
@@ -104,7 +104,7 @@ describe('useStream — chatSettings forwarding', () => {
   it('does not start a new run while one is already in progress', async () => {
     let resolveFirst!: () => void
     mockedConsume.mockImplementationOnce(
-      () => new Promise((resolve) => { resolveFirst = () => resolve([]) }),
+      () => new Promise((resolve) => { resolveFirst = () => resolve({ results: [], limitReached: false } as any) }),
     )
 
     const { result } = renderHook(() => useStream())

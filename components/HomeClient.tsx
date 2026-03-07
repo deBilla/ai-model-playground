@@ -12,6 +12,9 @@ import CompareLayout from '@/components/CompareLayout'
 import AuthModal from '@/components/AuthModal'
 import UpgradeBanner from '@/components/UpgradeBanner'
 import { Button } from '@/components/ui/button'
+import { useAuth } from '@/lib/hooks/useAuth'
+import { useHistory } from '@/lib/hooks/useHistory'
+import { useGuest } from '@/lib/hooks/useGuest'
 
 const HistoryDrawer = dynamic(
   () => import('@/components/HistoryDrawer'),
@@ -24,10 +27,7 @@ interface HomeClientProps {
 }
 
 export default function HomeClient({ initialUser, initialGuestComparisonCount }: HomeClientProps) {
-  const setUser = usePlaygroundStore((s) => s.setUser)
   const clearUser = usePlaygroundStore((s) => s.clearUser)
-  const setGuestComparisonCount = usePlaygroundStore((s) => s.setGuestComparisonCount)
-  const setHistory = usePlaygroundStore((s) => s.setHistory)
   const setShowAuthModal = usePlaygroundStore((s) => s.setShowAuthModal)
   const user = usePlaygroundStore((s) => s.user)
   const { run, stop } = useStream()
@@ -43,39 +43,32 @@ export default function HomeClient({ initialUser, initialGuestComparisonCount }:
     }
   }
 
-  const createGuestSession = useCallback(() => {
-    fetch('/api/guests', { method: 'POST' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.user) {
-          setUser(data.user as User)
-          setGuestComparisonCount(0)
-        }
-      })
-      .catch(() => { })
-      .finally(() => setSessionReady(true))
-  }, [setUser, setGuestComparisonCount])
+  const { logout } = useAuth()
+  const { getHistory } = useHistory()
+  const { createGuest } = useGuest()
+
+  const initGuest = useCallback(async () => {
+    await createGuest()
+    setSessionReady(true)
+  }, [createGuest])
 
   useEffect(() => {
     // New visitor — no session injected from server, create a guest
     if (!initialUser) {
-      createGuestSession()
+      initGuest()
     }
     // Load history in background regardless
-    fetch('/api/comparisons?page=1&limit=20')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (data?.data) setHistory(data.data) })
-      .catch(() => { })
+    getHistory(1, 20, true).catch(() => { })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogout = useCallback(async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' })
+      await logout()
     } catch { /* ignore */ }
     clearUser()
     setSessionReady(false)
-    createGuestSession()
-  }, [clearUser, createGuestSession])
+    initGuest()
+  }, [clearUser, initGuest, logout])
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">
