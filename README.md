@@ -24,7 +24,7 @@ The backend enforces a strict separation of concerns, ensuring business logic is
 
 ### 3. Server-Controlled Multiplexed Streaming
 
-To achieve simultaneous streaming without overwhelming the browser's connection limits, the app uses a server-side fan-out approach. The frontend sends a single request to `/api/comparisons`, which fans out to all three models concurrently on the backend. The server then multiplexes their NDJSON responses into a single, unified HTTP connection. This guarantees atomic database saving on completion and prevents the browser from opening too many concurrent network streams.
+The application uses a server-side multiplexed streaming approach (`/api/comparisons`). Instead of the frontend acting as a workflow engine that coordinates multiple AI models, the backend takes full ownership of the orchestration. The client simply receives a unified stream of NDJSON events. This strictly enforces the Separation of Concerns: the backend orchestrates multi-model inference, and the frontend only renders the results.
 
 ### 4. The Facade / Gateway Pattern
 
@@ -236,12 +236,12 @@ If a Playwright run fails in CI, the `test-results/` directory is uploaded as a 
 
 * **Single Multiplexed Stream vs Multiple Independent Streams**
  Chosen: A single `/api/comparisons` endpoint that multiplexes 3 AI streams into one connection.
- Tradeoff: Managing 3 independent streams from the client (`/api/chats?model=X`) is simpler to debug and allows for independent retries. However, multiplexing them server-side drastically reduces browser connection contention (1 connection instead of 3), guarantees atomic database saving, and allows secure, unified guest-limit checks without network race conditions.
+ Tradeoff: Managing 3 independent streams from the client (`/api/chats?model=X`) is simpler to debug, observable in the network tab, and allows for independent retries. However, for a product where the *core feature* is model comparison, multiplexing enforces that the backend orchestrates the multi-model workflow rather than treating the frontend as a workflow engine. It strictly separates concerns: backend orchestrates, frontend renders.
 
 
 * **Server-Side Session Hydration vs Client Fetching**
- Chosen: Hydrating the initial session and guest state via a Server Component (`app/page.tsx`) and injecting it into the Zustand store before the first paint.
- Tradeoff: It requires reading cookies on the server (`next/headers`) and carefully synchronizing the client store via `useLayoutEffect`. However, this RESTful approach completely eliminates layout shift, reduces "waterfall" network fetches on initial load for returning visitors, and ensures the `POST /api/guests` endpoint is only ever called for genuinely new users.
+ Chosen: Hydrating the initial session and guest state via a Server Component (`app/page.tsx`) and injecting it into the Zustand store on first render.
+ Tradeoff: It requires reading cookies on the server (`next/headers`) and securely mutating the client store during initialization. However, this RESTful approach completely eliminates layout shift, reduces "waterfall" network fetches on initial load for returning visitors, and ensures the `POST /api/guests` endpoint is only ever called for genuinely new users.
 
 
 * **Zustand vs Context/Redux**

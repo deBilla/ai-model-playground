@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useCallback, useRef, useState } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { LogOut, LogIn } from 'lucide-react'
 import { usePlaygroundStore } from '@/lib/store'
@@ -34,15 +34,14 @@ export default function HomeClient({ initialUser, initialGuestComparisonCount }:
   const hydrated = useRef(false)
   const [sessionReady, setSessionReady] = useState(!!initialUser)
 
-  // Seed Zustand from SSR-injected props before first paint
-  useLayoutEffect(() => {
-    if (hydrated.current) return
+  // Seed Zustand synchronously on first render (avoids useLayoutEffect React warnings)
+  if (!hydrated.current) {
     hydrated.current = true
     if (initialUser) {
-      setUser(initialUser)
-      setGuestComparisonCount(initialGuestComparisonCount)
+      // Direct store mutation is safe here locally during initialization
+      usePlaygroundStore.setState({ user: initialUser, guestComparisonCount: initialGuestComparisonCount })
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   const createGuestSession = useCallback(() => {
     fetch('/api/guests', { method: 'POST' })
@@ -53,7 +52,7 @@ export default function HomeClient({ initialUser, initialGuestComparisonCount }:
           setGuestComparisonCount(0)
         }
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setSessionReady(true))
   }, [setUser, setGuestComparisonCount])
 
@@ -66,7 +65,7 @@ export default function HomeClient({ initialUser, initialGuestComparisonCount }:
     fetch('/api/comparisons?page=1&limit=20')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (data?.data) setHistory(data.data) })
-      .catch(() => {})
+      .catch(() => { })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogout = useCallback(async () => {
