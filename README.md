@@ -22,9 +22,9 @@ The backend enforces a strict separation of concerns, ensuring business logic is
 
 * **Repositories (`lib/modules/.../repository.ts`):** The data access layer. Repositories interact directly with the Prisma client (`lib/db.ts`) to execute database queries.
 
-### 3. Client-Driven Fan-Out (Parallel Orchestration)
+### 3. Server-Controlled Multiplexed Streaming
 
-To achieve simultaneous streaming, the app uses a client-side fan-out approach. The browser initiates a `Promise.allSettled` block, firing independent parallel `POST` requests to the `/api/chats` route for each model. This utilizes HTTP/2 multiplexing, preventing a slow model from blocking the execution of faster models.
+To achieve simultaneous streaming without overwhelming the browser's connection limits, the app uses a server-side fan-out approach. The frontend sends a single request to `/api/comparisons`, which fans out to all three models concurrently on the backend. The server then multiplexes their NDJSON responses into a single, unified HTTP connection. This guarantees atomic database saving on completion and prevents the browser from opening too many concurrent network streams.
 
 ### 4. The Facade / Gateway Pattern
 
@@ -233,9 +233,14 @@ If a Playwright run fails in CI, the `test-results/` directory is uploaded as a 
  **Tradeoff:** Requires more boilerplate upfront compared to writing monolithic Next.js route handlers, but ensures the codebase remains robust, testable, and strictly decoupled as it grows.
 
 
-* **Single Chat Endpoint vs Batched Route**
- **Chosen:** A generic chat streaming route (`/api/chats`) called *N* times in parallel from the browser.
- **Tradeoff:** A server-side fan-out could reduce HTTP request overhead, but requires complex multiplexing to stream multiple responses back through a single connection. Client-side fan-out is highly resilient and delegates concurrency to the browser.
+* **Single Multiplexed Stream vs Multiple Independent Streams**
+ Chosen: A single `/api/comparisons` endpoint that multiplexes 3 AI streams into one connection.
+ Tradeoff: Managing 3 independent streams from the client (`/api/chats?model=X`) is simpler to debug and allows for independent retries. However, multiplexing them server-side drastically reduces browser connection contention (1 connection instead of 3), guarantees atomic database saving, and allows secure, unified guest-limit checks without network race conditions.
+
+
+* **Server-Side Session Hydration vs Client Fetching**
+ Chosen: Hydrating the initial session and guest state via a Server Component (`app/page.tsx`) and injecting it into the Zustand store before the first paint.
+ Tradeoff: It requires reading cookies on the server (`next/headers`) and carefully synchronizing the client store via `useLayoutEffect`. However, this RESTful approach completely eliminates layout shift, reduces "waterfall" network fetches on initial load for returning visitors, and ensures the `POST /api/guests` endpoint is only ever called for genuinely new users.
 
 
 * **Zustand vs Context/Redux**
