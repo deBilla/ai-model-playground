@@ -145,6 +145,11 @@ export default function HistoryDrawer() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const triggerButtonRef = useRef<HTMLButtonElement>(null)
   const controllerRef = useRef<AbortController | null>(null)
+  // Track user identity across renders to distinguish initial load from account switches
+  const prevUserIdRef = useRef<string | null | undefined>(undefined)
+  // Mirror history.length without making it a dependency of the user-watching effect
+  const historyLengthRef = useRef(history.length)
+  historyLengthRef.current = history.length
 
   const fetchPage = useCallback(async (pageNum: number, append = false) => {
     controllerRef.current?.abort()
@@ -163,10 +168,28 @@ export default function HistoryDrawer() {
   }, [appendHistory, setHistory])
 
   useEffect(() => {
-    setHistory([])
+    const prevId = prevUserIdRef.current
+    const currId = user?.id ?? null
+    prevUserIdRef.current = currId
+
+    // Same identity — user object reference changed but it's still the same account.
+    // Happens in StrictMode (double-invoke) and when setUser is called with fresh JSON.
+    if (prevId === currId) return
+
     setPage(1)
     setHasMore(false)
-    if (!user) return
+
+    if (!user) {
+      setHistory([])
+      return () => { controllerRef.current?.abort() }
+    }
+
+    // Skip fetch if HomeClient already pre-loaded history during the parallel init.
+    // prevId===null means we just transitioned from "no user" to a valid user on initial load.
+    if (prevId === null && historyLengthRef.current > 0) return
+
+    // User switched accounts (login/register) — clear stale data before fetching
+    if (prevId !== null) setHistory([])
     setLoading(true)
     fetchPage(1).finally(() => setLoading(false))
     return () => { controllerRef.current?.abort() }

@@ -2,14 +2,32 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import { GET, POST } from '@/app/api/comparisons/route'
 import { historyService } from '@/lib/modules/history'
-import { getUserFromRequest, signToken } from '@/lib/auth'
+import { getUserFromRequest } from '@/lib/auth'
+import { buildMultiplexedStream } from '@/lib/modules/chat/buildMultiplexedStream'
+import { chatService } from '@/lib/modules/chat'
 
-// Mock the history service and auth utilities
 vi.mock('@/lib/modules/history', () => ({
     historyService: {
         findAll: vi.fn(),
-        create: vi.fn(),
+        hasReachedGuestLimit: vi.fn(),
+        saveComparison: vi.fn(),
     }
+}))
+
+vi.mock('@/lib/modules/chat', () => ({
+    chatService: {
+        stream: vi.fn(),
+    }
+}))
+
+vi.mock('@/lib/modules/chat/buildMultiplexedStream', () => ({
+    buildMultiplexedStream: vi.fn(),
+}))
+
+vi.mock('@/lib/models.config', () => ({
+    MODELS: [{ id: 'openai' }, { id: 'anthropic' }],
+    getModel: vi.fn((id: string) => ({ id, label: id })),
+    isValidProviderId: vi.fn(() => true),
 }))
 
 vi.mock('@/lib/auth', async () => {
@@ -17,6 +35,7 @@ vi.mock('@/lib/auth', async () => {
     return {
         ...actual,
         getUserFromRequest: vi.fn(),
+        getGuestFromRequest: vi.fn(() => null),
         unauthorized: vi.fn(() => new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 }))
     }
 })
@@ -55,7 +74,7 @@ describe('Comparisons Route', () => {
 
             expect(res.status).toBe(200)
             expect(await res.json()).toEqual(mockResult)
-            expect(historyService.findAll).toHaveBeenCalledWith('user-1', 1, 20)
+            expect(historyService.findAll).toHaveBeenCalledWith('user-1', 1, 20, false)
         })
 
         it('uses pagination parameters from URL', async () => {
@@ -64,30 +83,11 @@ describe('Comparisons Route', () => {
             const req = createAuthRequest('http://localhost/api/comparisons?page=2&limit=10')
             await GET(req)
 
-            expect(historyService.findAll).toHaveBeenCalledWith('user-1', 2, 10)
+            expect(historyService.findAll).toHaveBeenCalledWith('user-1', 2, 10, false)
         })
     })
 
     describe('POST', () => {
-        const validBody = {
-            prompt: 'Test prompt',
-            responses: [
-                {
-                    provider: 'openai',
-                    label: 'GPT-4o',
-                    responseText: 'Hello',
-                    promptTokens: 10,
-                    completionTokens: 5,
-                    totalTokens: 15,
-                    latencyMs: 300,
-                    estimatedCost: 0.001,
-                    timeToFirstToken: 80,
-                    tokensPerSecond: 16.7,
-                    responseLength: 5
-                }
-            ]
-        }
-
         it('returns unauthorized if no user is found', async () => {
             vi.mocked(getUserFromRequest).mockReturnValue(null)
             const req = new NextRequest('http://localhost/api/comparisons', { method: 'POST' })
@@ -96,22 +96,42 @@ describe('Comparisons Route', () => {
             expect(res.status).toBe(401)
         })
 
+        it('returns 400 for invalid JSON body', async () => {
+            const req = new NextRequest('http://localhost/api/comparisons', {
+                method: 'POST',
+                headers: { Cookie: 'session=mock-token' },
+                body: 'invalid-json'
+            })
+            const res = await POST(req)
+
+            expect(res.status).toBe(400)
+            expect(await res.text()).toBe('Invalid JSON body')
+        })
+
         it('returns 422 for invalid body', async () => {
             const req = createAuthRequest('http://localhost/api/comparisons', 'POST', { prompt: '' })
             const res = await POST(req)
 
             expect(res.status).toBe(422)
-            expect(historyService.create).not.toHaveBeenCalled()
         })
 
-        it('calls historyService.create and returns 201 on success', async () => {
-            vi.mocked(historyService.create).mockResolvedValue({ id: 'cmp-1' } as any)
+        it('fans out to all models and returns NDJSON stream on success', async () => {
+            const mockStream = new ReadableStream()
+            vi.mocked(chatService.stream).mockReturnValue({ textStream: {}, usage: Promise.resolve({}) } as any)
+            vi.mocked(buildMultiplexedStream).mockReturnValue(mockStream)
 
-            const req = createAuthRequest('http://localhost/api/comparisons', 'POST', validBody)
+            const req = createAuthRequest('http://localhost/api/comparisons', 'POST', {
+                prompt: 'Test prompt',
+                temperature: 0.7,
+                maxTokens: 512,
+            })
             const res = await POST(req)
 
-            expect(res.status).toBe(201)
-            expect(historyService.create).toHaveBeenCalledWith('user-1', validBody)
+            expect(res.status).toBe(200)
+            expect(res.headers.get('Content-Type')).toBe('application/x-ndjson; charset=utf-8')
+            expect(res.headers.get('Cache-Control')).toBe('no-cache')
+            expect(chatService.stream).toHaveBeenCalledTimes(2) // one per model
+            expect(buildMultiplexedStream).toHaveBeenCalledOnce()
         })
     })
 })

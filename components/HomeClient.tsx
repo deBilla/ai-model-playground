@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback } from 'react'
+import { useEffect, useLayoutEffect, useCallback, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { LogOut, LogIn } from 'lucide-react'
 import { usePlaygroundStore } from '@/lib/store'
@@ -14,41 +14,69 @@ import UpgradeBanner from '@/components/UpgradeBanner'
 import { Button } from '@/components/ui/button'
 
 const HistoryDrawer = dynamic(
-  () => import('@/components/HistoryDrawer'), 
+  () => import('@/components/HistoryDrawer'),
   { ssr: false }
 )
 
-export default function HomeClient() {
+interface HomeClientProps {
+  initialUser: User | null
+  initialGuestComparisonCount: number
+}
+
+export default function HomeClient({ initialUser, initialGuestComparisonCount }: HomeClientProps) {
   const setUser = usePlaygroundStore((s) => s.setUser)
   const clearUser = usePlaygroundStore((s) => s.clearUser)
   const setGuestComparisonCount = usePlaygroundStore((s) => s.setGuestComparisonCount)
+  const setHistory = usePlaygroundStore((s) => s.setHistory)
   const setShowAuthModal = usePlaygroundStore((s) => s.setShowAuthModal)
   const user = usePlaygroundStore((s) => s.user)
   const { run, stop } = useStream()
+  const hydrated = useRef(false)
+  const [sessionReady, setSessionReady] = useState(!!initialUser)
 
-  const initGuestSession = useCallback(() => {
-    fetch('/api/guest/init', { method: 'POST' })
+  // Seed Zustand from SSR-injected props before first paint
+  useLayoutEffect(() => {
+    if (hydrated.current) return
+    hydrated.current = true
+    if (initialUser) {
+      setUser(initialUser)
+      setGuestComparisonCount(initialGuestComparisonCount)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const createGuestSession = useCallback(() => {
+    fetch('/api/guests', { method: 'POST' })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.user) {
           setUser(data.user as User)
-          setGuestComparisonCount(data.guestComparisonCount ?? 0)
+          setGuestComparisonCount(0)
         }
       })
       .catch(() => {})
+      .finally(() => setSessionReady(true))
   }, [setUser, setGuestComparisonCount])
 
   useEffect(() => {
-    initGuestSession()
-  }, [initGuestSession])
+    // New visitor — no session injected from server, create a guest
+    if (!initialUser) {
+      createGuestSession()
+    }
+    // Load history in background regardless
+    fetch('/api/comparisons?page=1&limit=20')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data?.data) setHistory(data.data) })
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogout = useCallback(async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' })
     } catch { /* ignore */ }
     clearUser()
-    initGuestSession()
-  }, [clearUser, initGuestSession])
+    setSessionReady(false)
+    createGuestSession()
+  }, [clearUser, createGuestSession])
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">
@@ -64,7 +92,7 @@ export default function HomeClient() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {user && !user.isGuest ? (
+          {sessionReady && (user && !user.isGuest ? (
             <>
               <span className="text-xs text-neutral-400 hidden sm:block">
                 {user.name ?? user.email}
@@ -90,7 +118,7 @@ export default function HomeClient() {
               <LogIn size={14} aria-hidden="true" />
               <span className="hidden sm:inline">Sign in</span>
             </Button>
-          )}
+          ))}
         </div>
       </header>
 
