@@ -37,9 +37,9 @@ ai-model-playground/
 ├── app/
 │   ├── api/
 │   │   ├── auth/                 # Controllers: Authentication endpoints
-│   │   ├── chats/                # Controllers: Streaming chat API (NDJSON)
-│   │   ├── comparisons/          # Controllers: Viewing/saving comparisons
-│   │   └── ...                   # Controllers: cron, guest, shares
+│   │   ├── comparisons/          # Controllers: Multiplexed streaming & saving
+│   │   ├── guests/               # Controllers: Guest session creation
+│   │   └── ...                   # Controllers: cron, shares
 │   ├── layout.tsx                
 │   └── page.tsx                  
 │
@@ -57,10 +57,11 @@ ai-model-playground/
 │   │   ├── chat/
 │   │   │   ├── chat.dto.ts       # Prompt and provider validation
 │   │   │   └── chat.service.ts   # AI streaming orchestration
-│   │   └── comparisons/
-│   │       ├── comparisons.dto.ts
-│   │       ├── comparisons.service.ts
-│   │       └── comparisons.repository.ts
+│   │   └── history/
+│   │       ├── history.dto.ts    # Schemas for saving/fetching comparisons
+│   │       ├── history.service.ts
+│   │       └── history.repository.ts
+│   ├── auth.server.ts            # Server-side cookie helpers for session
 │   ├── db.ts                     # Prisma client singleton
 │   ├── models.config.ts          # Single source of truth for all models
 │   └── store.ts                  # Zustand store for app state
