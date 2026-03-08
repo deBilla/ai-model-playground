@@ -3,9 +3,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import AuthModal from '@/components/AuthModal'
 import { usePlaygroundStore } from '@/lib/store'
 import { GUEST_COMPARISON_LIMIT } from '@/lib/constants'
+import { useAuth } from '@/lib/hooks/useAuth'
 
 vi.mock('@/lib/store', () => ({
   usePlaygroundStore: vi.fn(),
+}))
+
+const mockLogin = vi.fn()
+const mockRegister = vi.fn()
+
+vi.mock('@/lib/hooks/useAuth', () => ({
+  useAuth: () => ({
+    login: mockLogin,
+    register: mockRegister,
+  }),
 }))
 
 const mockSetShowAuthModal = vi.fn()
@@ -49,7 +60,6 @@ function setup({ showAuthModal = false, user = null, guestComparisonCount = 0 }:
 describe('AuthModal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    global.fetch = vi.fn()
   })
 
   // ─── Closed state ───────────────────────────────────────────────────────────
@@ -97,7 +107,7 @@ describe('AuthModal', () => {
       fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }))
 
       expect(screen.getByText(/valid email/i)).toBeInTheDocument()
-      expect(global.fetch).not.toHaveBeenCalled()
+      expect(mockLogin).not.toHaveBeenCalled()
     })
 
     it('shows validation error for password shorter than 8 characters', async () => {
@@ -109,14 +119,11 @@ describe('AuthModal', () => {
       fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }))
 
       expect(screen.getByText(/at least 8 characters/i)).toBeInTheDocument()
-      expect(global.fetch).not.toHaveBeenCalled()
+      expect(mockLogin).not.toHaveBeenCalled()
     })
 
-    it('calls /api/auth/login on valid login submission', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
-        ok: true,
-        json: async () => ({ user: REAL_USER }),
-      } as Response)
+    it('calls login on valid login submission', async () => {
+      mockLogin.mockResolvedValue(REAL_USER)
 
       render(<AuthModal />)
       await waitFor(() => expect(screen.getByLabelText(/email/i)).toBeInTheDocument())
@@ -126,18 +133,12 @@ describe('AuthModal', () => {
       fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }))
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          '/api/auth/login',
-          expect.objectContaining({ method: 'POST' })
-        )
+        expect(mockLogin).toHaveBeenCalledWith('a@b.com', 'password123')
       })
     })
 
     it('calls setUser and closes modal on successful login', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
-        ok: true,
-        json: async () => ({ user: REAL_USER }),
-      } as Response)
+      mockLogin.mockResolvedValue(REAL_USER)
 
       render(<AuthModal />)
       await waitFor(() => expect(screen.getByLabelText(/email/i)).toBeInTheDocument())
@@ -153,10 +154,7 @@ describe('AuthModal', () => {
     })
 
     it('shows server error message on failed login', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
-        ok: false,
-        json: async () => ({ error: 'Invalid email or password' }),
-      } as Response)
+      mockLogin.mockRejectedValue('Invalid email or password')
 
       render(<AuthModal />)
       await waitFor(() => expect(screen.getByLabelText(/email/i)).toBeInTheDocument())
@@ -170,8 +168,8 @@ describe('AuthModal', () => {
       )
     })
 
-    it('shows a network error message when fetch throws', async () => {
-      vi.mocked(global.fetch).mockRejectedValue(new Error('Network error'))
+    it('shows a network error message when login throws', async () => {
+      mockLogin.mockRejectedValue(new Error('Network error'))
 
       render(<AuthModal />)
       await waitFor(() => expect(screen.getByLabelText(/email/i)).toBeInTheDocument())
@@ -214,11 +212,8 @@ describe('AuthModal', () => {
       expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument()
     })
 
-    it('calls /api/auth/register on valid register submission', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
-        ok: true,
-        json: async () => ({ user: REAL_USER }),
-      } as Response)
+    it('calls register on valid register submission', async () => {
+      mockRegister.mockResolvedValue(REAL_USER)
 
       render(<AuthModal />)
       await waitFor(() => expect(screen.getByText(/create one free/i)).toBeInTheDocument())
@@ -229,10 +224,7 @@ describe('AuthModal', () => {
       fireEvent.click(screen.getByRole('button', { name: /create account/i }))
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          '/api/auth/register',
-          expect.objectContaining({ method: 'POST' })
-        )
+        expect(mockRegister).toHaveBeenCalledWith('new@b.com', 'securepassword', undefined)
       })
     })
   })

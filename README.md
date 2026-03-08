@@ -22,9 +22,9 @@ The backend enforces a strict separation of concerns, ensuring business logic is
 
 * **Repositories (`lib/modules/.../repository.ts`):** The data access layer. Repositories interact directly with the Prisma client (`lib/db.ts`) to execute database queries.
 
-### 3. Client-Driven Fan-Out (Parallel Orchestration)
+### 3. Server-Controlled Multiplexed Streaming
 
-To achieve simultaneous streaming, the app uses a client-side fan-out approach. The browser initiates a `Promise.allSettled` block, firing independent parallel `POST` requests to the `/api/chats` route for each model. This utilizes HTTP/2 multiplexing, preventing a slow model from blocking the execution of faster models.
+The application uses a server-side multiplexed streaming approach (`/api/comparisons`). Instead of the frontend acting as a workflow engine that coordinates multiple AI models, the backend takes full ownership of the orchestration. The client simply receives a unified stream of NDJSON events. This strictly enforces the Separation of Concerns: the backend orchestrates multi-model inference, and the frontend only renders the results.
 
 ### 4. The Facade / Gateway Pattern
 
@@ -37,9 +37,9 @@ ai-model-playground/
 ├── app/
 │   ├── api/
 │   │   ├── auth/                 # Controllers: Authentication endpoints
-│   │   ├── chats/                # Controllers: Streaming chat API (NDJSON)
-│   │   ├── comparisons/          # Controllers: Viewing/saving comparisons
-│   │   └── ...                   # Controllers: cron, guest, shares
+│   │   ├── comparisons/          # Controllers: Multiplexed streaming & saving
+│   │   ├── guests/               # Controllers: Guest session creation
+│   │   └── ...                   # Controllers: cron, shares
 │   ├── layout.tsx                
 │   └── page.tsx                  
 │
@@ -54,13 +54,19 @@ ai-model-playground/
 │   │   │   ├── auth.dto.ts       # Validation schemas for login/register
 │   │   │   ├── auth.service.ts   # Business logic (hashing, JWT signing)
 │   │   │   └── auth.repository.ts# User DB queries
-│   │   ├── chat/
-│   │   │   ├── chat.dto.ts       # Prompt and provider validation
-│   │   │   └── chat.service.ts   # AI streaming orchestration
-│   │   └── comparisons/
-│   │       ├── comparisons.dto.ts
-│   │       ├── comparisons.service.ts
-│   │       └── comparisons.repository.ts
+│   │   ├── comparison/
+│   │   │   ├── compare.dto.ts    # Public API request validation (Zod)
+│   │   │   ├── comparison.service.ts # fanOut + stream orchestration
+│   │   │   ├── buildMultiplexedStream.ts # Concurrent NDJSON fan-out
+│   │   │   ├── buildNdjsonStream.ts      # Single-provider stream builder
+│   │   │   └── ndjsonCodec.ts    # NDJSON frame types, encoder, parser
+│   │   └── history/
+│   │       ├── history.dto.ts    # Schemas for saving/fetching comparisons
+│   │       ├── history.service.ts
+│   │       └── history.repository.ts
+│   ├── auth.ts                   # JWT helpers + cookie setters/clearers
+│   ├── route-guards.ts           # withAuth / withGuestLimit HOF middleware
+│   ├── compareStream.ts          # Client-side NDJSON stream consumer
 │   ├── db.ts                     # Prisma client singleton
 │   ├── models.config.ts          # Single source of truth for all models
 │   └── store.ts                  # Zustand store for app state
@@ -165,12 +171,12 @@ npm test              # run once
 npm run test:watch    # watch mode
 ```
 
-**Coverage (~174 tests):**
+**Coverage (~164 tests):**
 
 | Area | What is tested |
 |---|---|
-| `__tests__/api/` | Route handlers (auth, comparisons, chats, guest, shares) |
-| `__tests__/lib/modules/` | Auth service/repo, chat service, history service/repo |
+| `__tests__/api/` | Route handlers (auth, comparisons, guest, shares) |
+| `__tests__/lib/modules/` | Auth service/repo, comparison service, history service/repo |
 | `__tests__/lib/` | `models.config`, cost calculation, token formatting |
 | `__tests__/components/` | `MetricsBadge`, `UpgradeBanner`, `AuthModal`, `HistoryDrawer` |
 
@@ -233,9 +239,14 @@ If a Playwright run fails in CI, the `test-results/` directory is uploaded as a 
  **Tradeoff:** Requires more boilerplate upfront compared to writing monolithic Next.js route handlers, but ensures the codebase remains robust, testable, and strictly decoupled as it grows.
 
 
-* **Single Chat Endpoint vs Batched Route**
- **Chosen:** A generic chat streaming route (`/api/chats`) called *N* times in parallel from the browser.
- **Tradeoff:** A server-side fan-out could reduce HTTP request overhead, but requires complex multiplexing to stream multiple responses back through a single connection. Client-side fan-out is highly resilient and delegates concurrency to the browser.
+* **Single Multiplexed Stream vs Multiple Independent Streams**
+ Chosen: A single `/api/comparisons` endpoint that multiplexes 3 AI streams into one connection.
+ Tradeoff: Managing 3 independent streams from the client (`/api/chats?model=X`) is simpler to debug, observable in the network tab, and allows for independent retries. However, for a product where the *core feature* is model comparison, multiplexing enforces that the backend orchestrates the multi-model workflow rather than treating the frontend as a workflow engine. It strictly separates concerns: backend orchestrates, frontend renders.
+
+
+* **Server-Side Session Hydration vs Client Fetching**
+ Chosen: Hydrating the initial session and guest state via a Server Component (`app/page.tsx`) and injecting it into the Zustand store on first render.
+ Tradeoff: It requires reading cookies on the server (`next/headers`) and securely mutating the client store during initialization. However, this RESTful approach completely eliminates layout shift, reduces "waterfall" network fetches on initial load for returning visitors, and ensures the `POST /api/guests` endpoint is only ever called for genuinely new users.
 
 
 * **Zustand vs Context/Redux**

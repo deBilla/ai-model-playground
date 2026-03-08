@@ -1,15 +1,10 @@
 import type { LanguageModelUsage } from 'ai'
+import { enqueueJson, classifyStreamError } from './ndjsonCodec'
 
 type StreamResult = {
   textStream: AsyncIterable<string>
   usage: PromiseLike<LanguageModelUsage>
   costFor: (promptTokens: number, completionTokens: number) => number
-}
-
-const encoder = new TextEncoder()
-
-function enqueueJson(controller: ReadableStreamDefaultController, obj: Record<string, unknown>) {
-  controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'))
 }
 
 export function buildNdjsonStream(result: StreamResult, startTime: number, provider: string): ReadableStream {
@@ -49,15 +44,8 @@ export function buildNdjsonStream(result: StreamResult, startTime: number, provi
           responseLength,
         })
       } catch (err) {
-        const error = err as { status?: number; message?: string } | null
-        const isRateLimit =
-          error?.status === 429 ||
-          error?.message?.toLowerCase().includes('rate limit') ||
-          error?.message?.toLowerCase().includes('too many requests')
-        const errorMessage = isRateLimit
-          ? 'Rate limit exceeded. Please wait a moment and try again.'
-          : err instanceof Error ? err.message : 'Stream error'
-        enqueueJson(controller, { t: 'error', provider, v: errorMessage, isRateLimit })
+        const { isRateLimit, message } = classifyStreamError(err)
+        enqueueJson(controller, { t: 'error', provider, v: message, isRateLimit })
       } finally {
         controller.close()
       }

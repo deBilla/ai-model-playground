@@ -2,6 +2,7 @@ import { getModel, isValidProviderId } from '@/lib/models.config'
 import type { ModelResult, ComparisonRecord, PaginatedResult } from '@/lib/types'
 import type { HistoryRepository } from './history.repository'
 import type { CreateComparisonDto } from './history.dto'
+import { GUEST_COMPARISON_LIMIT } from '@/lib/constants'
 
 type DbResponse = {
   provider: string
@@ -49,10 +50,11 @@ function toRecord(c: { id: string; prompt: string; createdAt: Date; shareToken: 
 export class HistoryService {
   constructor(private readonly repository: HistoryRepository) {}
 
-  async findAll(userId: string, page: number, limit: number): Promise<PaginatedResult<ComparisonRecord>> {
+  async findAll(userId: string, page: number, limit: number, isGuest = false): Promise<PaginatedResult<ComparisonRecord>> {
     const { comparisons, total } = await this.repository.findAllByUser(userId, page, limit)
+    const data = comparisons.map(toRecord)
     return {
-      data: comparisons.map(toRecord),
+      data: isGuest ? data.map((r) => ({ ...r, shareToken: null })) : data,
       total,
       page,
       limit,
@@ -77,6 +79,20 @@ export class HistoryService {
 
   async countByUser(userId: string): Promise<number> {
     return this.repository.countByUser(userId)
+  }
+
+  async hasReachedGuestLimit(userId: string): Promise<boolean> {
+    const count = await this.repository.countByUser(userId)
+    return count >= GUEST_COMPARISON_LIMIT
+  }
+
+  async saveComparison(
+    userId: string,
+    isGuest: boolean,
+    dto: CreateComparisonDto,
+  ): Promise<ComparisonRecord> {
+    const record = await this.create(userId, dto)
+    return isGuest ? { ...record, shareToken: null } : record
   }
 
   async delete(userId: string, id: string): Promise<boolean> {
