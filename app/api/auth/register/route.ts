@@ -1,24 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { authService } from '@/lib/modules/auth'
 import { RegisterRequestSchema } from '@/lib/modules/auth/auth.dto'
 import { signToken, setSessionCookie, getGuestFromRequest, clearGuestCookie } from '@/lib/auth'
+import { withJsonBody } from '@/lib/route-guards'
 
-export async function POST(req: NextRequest) {
-  let body: unknown
-  try { body = await req.json() } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-  }
-
-  const parsed = RegisterRequestSchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 422 })
-  }
-
+export const POST = withJsonBody(RegisterRequestSchema, async (req, data) => {
   try {
     const guestUserId = getGuestFromRequest(req)
     const user = guestUserId
-      ? await authService.registerFromGuest(guestUserId, parsed.data)
-      : await authService.register(parsed.data)
+      ? await authService.registerFromGuest(guestUserId, data)
+      : await authService.register(data)
 
     const token = signToken(user.id)
     const res = NextResponse.json({ user }, { status: 201 })
@@ -29,4 +20,4 @@ export async function POST(req: NextRequest) {
     const message = err instanceof Error ? err.message : 'Registration failed'
     return NextResponse.json({ error: message }, { status: 409 })
   }
-}
+})

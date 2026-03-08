@@ -30,6 +30,7 @@ export function useStream() {
       isRunning.current = false
 
       if (limitReached) {
+        resetPanels()
         setShowAuthModal(true)
         return
       }

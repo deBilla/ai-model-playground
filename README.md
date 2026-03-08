@@ -54,14 +54,19 @@ ai-model-playground/
 │   │   │   ├── auth.dto.ts       # Validation schemas for login/register
 │   │   │   ├── auth.service.ts   # Business logic (hashing, JWT signing)
 │   │   │   └── auth.repository.ts# User DB queries
-│   │   ├── chat/
-│   │   │   ├── chat.dto.ts       # Prompt and provider validation
-│   │   │   └── chat.service.ts   # AI streaming orchestration
+│   │   ├── comparison/
+│   │   │   ├── compare.dto.ts    # Public API request validation (Zod)
+│   │   │   ├── comparison.service.ts # fanOut + stream orchestration
+│   │   │   ├── buildMultiplexedStream.ts # Concurrent NDJSON fan-out
+│   │   │   ├── buildNdjsonStream.ts      # Single-provider stream builder
+│   │   │   └── ndjsonCodec.ts    # NDJSON frame types, encoder, parser
 │   │   └── history/
 │   │       ├── history.dto.ts    # Schemas for saving/fetching comparisons
 │   │       ├── history.service.ts
 │   │       └── history.repository.ts
-│   ├── auth.server.ts            # Server-side cookie helpers for session
+│   ├── auth.ts                   # JWT helpers + cookie setters/clearers
+│   ├── route-guards.ts           # withAuth / withGuestLimit HOF middleware
+│   ├── compareStream.ts          # Client-side NDJSON stream consumer
 │   ├── db.ts                     # Prisma client singleton
 │   ├── models.config.ts          # Single source of truth for all models
 │   └── store.ts                  # Zustand store for app state
@@ -166,12 +171,12 @@ npm test              # run once
 npm run test:watch    # watch mode
 ```
 
-**Coverage (~174 tests):**
+**Coverage (~164 tests):**
 
 | Area | What is tested |
 |---|---|
-| `__tests__/api/` | Route handlers (auth, comparisons, chats, guest, shares) |
-| `__tests__/lib/modules/` | Auth service/repo, chat service, history service/repo |
+| `__tests__/api/` | Route handlers (auth, comparisons, guest, shares) |
+| `__tests__/lib/modules/` | Auth service/repo, comparison service, history service/repo |
 | `__tests__/lib/` | `models.config`, cost calculation, token formatting |
 | `__tests__/components/` | `MetricsBadge`, `UpgradeBanner`, `AuthModal`, `HistoryDrawer` |
 

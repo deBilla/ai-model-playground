@@ -1,7 +1,7 @@
 import { getModel, MODELS } from './models.config'
 import type { ProviderId } from './models.config'
 import type { ModelResult, ComparisonRecord, PanelState } from './types'
-import { type StreamLine, parseLine } from '@/lib/modules/chat/ndjsonCodec'
+import { type StreamLine, parseLine } from '@/lib/modules/comparison/ndjsonCodec'
 
 type LineCtx = { streamedText: string; metrics: PanelState['metrics'] | undefined }
 

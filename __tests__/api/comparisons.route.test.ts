@@ -3,8 +3,8 @@ import { NextRequest } from 'next/server'
 import { GET, POST } from '@/app/api/comparisons/route'
 import { historyService } from '@/lib/modules/history'
 import { getUserFromRequest } from '@/lib/auth'
-import { buildMultiplexedStream } from '@/lib/modules/chat/buildMultiplexedStream'
-import { chatService } from '@/lib/modules/chat'
+import { buildMultiplexedStream } from '@/lib/modules/comparison/buildMultiplexedStream'
+import { comparisonService } from '@/lib/modules/comparison'
 
 vi.mock('@/lib/modules/history', () => ({
     historyService: {
@@ -14,13 +14,13 @@ vi.mock('@/lib/modules/history', () => ({
     }
 }))
 
-vi.mock('@/lib/modules/chat', () => ({
-    chatService: {
-        stream: vi.fn(),
+vi.mock('@/lib/modules/comparison', () => ({
+    comparisonService: {
+        fanOut: vi.fn(),
     }
 }))
 
-vi.mock('@/lib/modules/chat/buildMultiplexedStream', () => ({
+vi.mock('@/lib/modules/comparison/buildMultiplexedStream', () => ({
     buildMultiplexedStream: vi.fn(),
 }))
 
@@ -117,7 +117,7 @@ describe('Comparisons Route', () => {
 
         it('fans out to all models and returns NDJSON stream on success', async () => {
             const mockStream = new ReadableStream()
-            vi.mocked(chatService.stream).mockReturnValue({ textStream: {}, usage: Promise.resolve({}) } as any)
+            vi.mocked(comparisonService.fanOut).mockReturnValue([])
             vi.mocked(buildMultiplexedStream).mockReturnValue(mockStream)
 
             const req = createAuthRequest('http://localhost/api/comparisons', 'POST', {
@@ -130,7 +130,7 @@ describe('Comparisons Route', () => {
             expect(res.status).toBe(200)
             expect(res.headers.get('Content-Type')).toBe('application/x-ndjson; charset=utf-8')
             expect(res.headers.get('Cache-Control')).toBe('no-cache')
-            expect(chatService.stream).toHaveBeenCalledTimes(2) // one per model
+            expect(comparisonService.fanOut).toHaveBeenCalledWith({ prompt: 'Test prompt', temperature: 0.7, maxTokens: 512 })
             expect(buildMultiplexedStream).toHaveBeenCalledOnce()
         })
     })

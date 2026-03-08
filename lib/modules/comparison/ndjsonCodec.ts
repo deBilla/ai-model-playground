@@ -1,6 +1,6 @@
 /**
  * Single authoritative definition of the NDJSON streaming protocol used by
- * both /api/chats (single-provider) and /api/compare (multiplexed).
+ * /api/comparisons (multiplexed multi-provider stream).
  *
  * Each newline-delimited line is one of three discriminated shapes:
  *   { t: 'text',  provider, v: string }

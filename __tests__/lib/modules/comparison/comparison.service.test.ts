@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ChatService } from '@/lib/modules/chat/chat.service'
+import { ComparisonService } from '@/lib/modules/comparison/comparison.service'
 import { getModel, calculateCost } from '@/lib/models.config'
 import { streamText } from 'ai'
 
-// Mock the AI SDK and model config
 vi.mock('@ai-sdk/openai', () => ({
     createOpenAI: vi.fn(() => vi.fn())
 }))
@@ -14,14 +13,16 @@ vi.mock('ai', () => ({
 
 vi.mock('@/lib/models.config', () => ({
     getModel: vi.fn(),
-    calculateCost: vi.fn()
+    calculateCost: vi.fn(),
+    isValidProviderId: vi.fn(() => true),
+    MODELS: [],
 }))
 
-describe('ChatService', () => {
-    let service: ChatService
+describe('ComparisonService', () => {
+    let service: ComparisonService
 
     beforeEach(() => {
-        service = new ChatService()
+        service = new ComparisonService()
         vi.clearAllMocks()
     })
 

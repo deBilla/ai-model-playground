@@ -1,24 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { chatService } from '@/lib/modules/chat'
-import { CompareRequestSchema } from '@/lib/modules/chat/compare.dto'
-import { buildMultiplexedStream, type CompletedProviderResponse } from '@/lib/modules/chat/buildMultiplexedStream'
-import { getUserFromRequest, getGuestFromRequest, unauthorized } from '@/lib/auth'
-import { MODELS, getModel } from '@/lib/models.config'
-import type { ProviderId } from '@/lib/models.config'
+import { NextResponse } from 'next/server'
+import { comparisonService } from '@/lib/modules/comparison'
+import { CompareRequestSchema } from '@/lib/modules/comparison/compare.dto'
+import { buildMultiplexedStream, type CompletedProviderResponse } from '@/lib/modules/comparison/buildMultiplexedStream'
+import { getModel, type ProviderId } from '@/lib/models.config'
 import { historyService } from '@/lib/modules/history'
 import { ListComparisonsSchema } from '@/lib/modules/history/history.dto'
+import { withAuth, withGuestLimit } from '@/lib/route-guards'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
 const err = (msg: string, status: number) => NextResponse.json({ error: msg }, { status })
 
-export async function GET(req: NextRequest) {
-  const sessionUserId = getUserFromRequest(req)
-  const guestUserId = sessionUserId ? null : getGuestFromRequest(req)
-  const userId = sessionUserId ?? guestUserId
-  if (!userId) return unauthorized()
-
+export const GET = withAuth(async (req, { userId, isGuest }) => {
   const { searchParams } = new URL(req.url)
   const p = ListComparisonsSchema.safeParse({
     page: searchParams.get('page'),
@@ -26,9 +20,9 @@ export async function GET(req: NextRequest) {
   })
   const { page, limit } = p.success ? p.data : { page: 1, limit: 20 }
   try {
-    return NextResponse.json(await historyService.findAll(userId, page, limit, !!guestUserId))
+    return NextResponse.json(await historyService.findAll(userId, page, limit, isGuest))
   } catch { return err('Failed to fetch comparisons', 500) }
-}
+})
 
 /**
  * POST /api/comparisons
@@ -36,20 +30,7 @@ export async function GET(req: NextRequest) {
  * NDJSON responses over a single connection.
  * Each line: { t: 'text'|'meta'|'error'|'saved', provider?, ...fields }
  */
-export async function POST(req: NextRequest) {
-  const sessionUserId = getUserFromRequest(req)
-  const guestUserId = sessionUserId ? null : getGuestFromRequest(req)
-  const userId = sessionUserId ?? guestUserId
-  if (!userId) return unauthorized()
-
-  // Fail fast: check guest limit before starting expensive model streams
-  if (guestUserId && await historyService.hasReachedGuestLimit(guestUserId)) {
-    return new Response(
-      JSON.stringify({ error: 'Comparison limit reached. Sign up to save unlimited comparisons.', limitReached: true }),
-      { status: 403, headers: { 'Content-Type': 'application/json' } },
-    )
-  }
-
+export const POST = withAuth(withGuestLimit(async (req, { userId, guestUserId }) => {
   let body: unknown
   try {
     body = await req.json()
@@ -64,11 +45,7 @@ export async function POST(req: NextRequest) {
 
   const { prompt, temperature, maxTokens } = parsed.data
 
-  const providerStreams = MODELS.map((model) => ({
-    ...chatService.stream({ prompt, provider: model.id as ProviderId, temperature, maxTokens }),
-    provider: model.id,
-    startTime: Date.now(),
-  }))
+  const providerStreams = comparisonService.fanOut({ prompt, temperature, maxTokens })
 
   const onAllComplete = async (responses: CompletedProviderResponse[]) => {
     const record = await historyService.saveComparison(userId, !!guestUserId, {
@@ -89,4 +66,4 @@ export async function POST(req: NextRequest) {
       'X-Accel-Buffering': 'no',
     },
   })
-}
+}))
