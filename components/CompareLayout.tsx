@@ -9,6 +9,44 @@ import MetricsComparison from './MetricsComparison'
 
 export default function CompareLayout() {
   const panels = usePlaygroundStore((s) => s.panels)
+  const [syncScrollEnabled, setSyncScrollEnabled] = useState(false)
+  const syncScrollEnabledRef = useRef(false)
+  const panels = usePlaygroundStore((s) => s.panels)
+  const panelRefs = useRef<Record<string, HTMLDivElement | null>>(
+    Object.fromEntries(MODELS.map((m) => [m.id, null])),
+  )
+  const isScrolling = useRef(false)
+
+  const toggleSync = useCallback(() => {
+    setSyncScrollEnabled((v) => {
+      syncScrollEnabledRef.current = !v
+      return !v
+    })
+  }, [])
+
+  // Stable handler — reads syncScrollEnabledRef so it never goes stale
+  // even though el.onscroll is assigned only once on mount.
+  const handleScroll = useCallback(
+    (source: ProviderId) => () => {
+      if (!syncScrollEnabledRef.current || isScrolling.current) return
+      const sourceEl = panelRefs.current[source]
+      if (!sourceEl) return
+      const scrollTop = sourceEl.scrollTop
+      isScrolling.current = true
+      MODELS.forEach(({ id }) => {
+        if (id !== source) {
+          const el = panelRefs.current[id]
+          if (el) el.scrollTop = scrollTop
+        }
+      })
+      requestAnimationFrame(() => { isScrolling.current = false })
+    },
+    [],
+  )
+
+  const handleSwitchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleSync() }
+  }
 
   // Collect completed results for MetricsComparison
   const allDone = MODELS.every(({ id }) => panels[id]?.status === 'done')
